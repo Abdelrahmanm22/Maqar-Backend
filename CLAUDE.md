@@ -68,8 +68,10 @@ Maqar.Admin        (MVC dashboard — references Maqar.Repository + Maqar.Servic
     └── Program.cs
 
 Maqar.Api          (Web API — references Maqar.Repository + Maqar.Services)
-    ├── Controllers/       (empty — public endpoints go here)
-    └── Program.cs         (Serilog, DbContext, UoW, generic repo, OpenAPI, CORS "Frontend")
+    ├── Controllers/       (ApiBaseController, ErrorsController — public endpoints go here)
+    ├── Errors/            (ApiResponse, ApiValidationErrorResponse, ApiExceptionResponse)
+    ├── Middlewares/       (ExceptionMiddleware)
+    └── Program.cs         (Serilog, DbContext, UoW, generic repo, OpenAPI, CORS "Frontend", error handling)
 ```
 
 ### Dependency Flow
@@ -280,6 +282,34 @@ Server=.;Database=MaqarDB;Trusted_Connection=True;MultipleActiveResultSets=true;
 - Serilog, controllers, OpenAPI (`/openapi/v1.json` in Development), `MaqarContext`, `IUnitOfWork` and the generic repo.
 - CORS policy **`Frontend`**, with origins from `Cors:AllowedOrigins` in `appsettings.json`. Defaults: `http://localhost:8080` (Lovable/Vite dev server) and `http://localhost:5173`.
 - No auth.
+- **Pipeline:** `ExceptionMiddleware` (first, every environment) → `MapOpenApi` (Development) → `UseStatusCodePagesWithReExecute("/errors/{0}")` → HTTPS redirection → CORS → authorization → `MapControllers`.
+
+### API Error Handling (ported from Talabat.APIs)
+
+Every error has the same JSON shape, `{ statusCode, message }`, plus `errors` or `details` where they apply. **The frontend can rely on that shape. Never return a bare `NotFound()` / `BadRequest()` or a ProblemDetails body.**
+
+| Case | Produced by | Status | Body |
+|---|---|---|---|
+| **NotFound / BadRequest** from an action | The controller: `return NotFound(new ApiResponse(404, "Property not found"));` | 404 / 400 | `ApiResponse` (a `null` message falls back to the default for the code) |
+| **Validation** (model binding / DataAnnotations) | `InvalidModelStateResponseFactory` in `Program.cs` (the `Validation error response` region) | 400 | `ApiValidationErrorResponse`: `errors: string[]` |
+| **Server error** (any unhandled exception) | `Middlewares/ExceptionMiddleware` | 500 | `ApiExceptionResponse`. `details` holds the stack trace **in Development only**; it is `null` otherwise. The exception is logged through Serilog |
+| **Not-found endpoint** / wrong verb / bare 401/403 | `UseStatusCodePagesWithReExecute` re-executes to `ErrorsController` (`errors/{code}`) | the real code (404, 405, …) | `ApiResponse` |
+
+**Rules:**
+- **Inherit public controllers from `ApiBaseController`.** It provides `api/[controller]` routing and `[ApiController]`, and the automatic validation response depends on `[ApiController]`.
+- **`ErrorsController` has no verb attribute on purpose**, because the re-executed request keeps its original method. It is hidden from OpenAPI with `[ApiExplorerSettings(IgnoreApi = true)]`.
+- **Re-execute only fires when the response has no body.** A `NotFound(new ApiResponse(...))` passes through untouched.
+- **Verified on 2026-10-16** with a temporary BuggyController (since deleted):
+
+| Request | Result |
+|---|---|
+| `notfound` | 404 |
+| `badrequest` | 400 |
+| invalid POST body | 400 + `errors` |
+| `servererror` | 500, with `details` in Development and `null` in Production |
+| `/api/doesnotexist` | 404 |
+| `DELETE` on a GET route | 405 |
+| `/openapi/v1.json` | 200, with no `errors/` route |
 
 ---
 
@@ -496,6 +526,16 @@ They render detached in this template; Travel tried and abandoned them. Show the
 - **`CascadeDeleteTiming.Immediate` (the EF default) defeats soft delete for tracked children.** `Remove()` marks loaded dependents `Deleted` immediately, so they are hard-deleted even though `SaveChanges` turns the parent into a soft delete. `MaqarContext` sets `OnSaveChanges`. Don't remove it.
 - **`HasDefaultValue(true)` on a bool is a trap.** It was removed from `Area`/`Feature.IsActive` before the migration. **`AppUserConfig.IsActive` still has it**, inherited from Travel. Creating a user with `IsActive = false` is likely saved as active; this is not verified yet. Fix it by dropping the default and adding a migration.
 - **The EF tools are 10.0.8 while the runtime is 9.0.21.** Migrations generate fine. Upgrade the tools only together with the packages.
+
+### 2026-10-16 — v3: API error handling ported from Talabat.APIs
+Talabat's version had five bugs. None of them was copied:
+1. **`ApiExceptionResponse` ignored its `status` argument** (it hardcoded `base(500)`). It now passes the status through.
+2. **`ExceptionMiddleware` was registered only in Development.** Production exceptions bypassed it and returned a bare 500. It now runs everywhere, and only `Details` depends on the environment.
+3. **`context.Response.WriteAsync(...)` wasn't awaited**, so the error body could be cut off. It is awaited now.
+4. **`ErrorsController` always returned `NotFound(...)`,** so a re-executed 405 or 401 went out as 404. It now returns `ObjectResult { StatusCode = code }`.
+5. **Naming:** `looger` → `_logger`, `APIBaseController` → `ApiBaseController`, and the commented-out code was dropped.
+
+When porting from Talabat again, check for the same patterns.
 
 ### Reusable guardrails (apply as the domain is built)
 - **Roles and users can't go through `IUnitOfWork.Repository<T>()`.** It requires `BaseModel`, which has an int Id, and Identity uses string Ids. Use `UserManager`/`RoleManager`. They share the scoped `MaqarContext`, so `BeginTransactionAsync` still makes multi-claim changes atomic.

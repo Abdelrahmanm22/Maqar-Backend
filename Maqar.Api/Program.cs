@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Maqar.Api.Errors;
+using Maqar.Api.Middlewares;
 using Maqar.Domain;
 using Maqar.Domain.Repositories;
 using Maqar.Repository;
@@ -37,6 +40,24 @@ namespace Maqar.Api
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
 
+            #region Validation error response
+            // [ApiController] short-circuits an invalid model before the action runs; this replaces the
+            // default ProblemDetails body with the ApiResponse shape every other error uses.
+            builder.Services.Configure<ApiBehaviorOptions>(options =>
+            {
+                options.InvalidModelStateResponseFactory = actionContext =>
+                {
+                    var errors = actionContext.ModelState
+                        .Where(p => p.Value?.Errors.Count > 0)
+                        .SelectMany(p => p.Value!.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToList();
+
+                    return new BadRequestObjectResult(new ApiValidationErrorResponse { Errors = errors });
+                };
+            });
+            #endregion
+
             // The same MaqarContext the admin dashboard migrates — the API never runs migrations itself.
             builder.Services.AddDbContext<MaqarContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -55,10 +76,16 @@ namespace Maqar.Api
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
+            // First, and in every environment — it must wrap everything below to catch it.
+            app.UseMiddleware<ExceptionMiddleware>();
+
             if (app.Environment.IsDevelopment())
             {
                 app.MapOpenApi();
             }
+
+            // Body-less error responses (unknown route, wrong verb, bare 401/403) → ErrorsController.
+            app.UseStatusCodePagesWithReExecute("/errors/{0}");
 
             app.UseHttpsRedirection();
 
