@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -12,9 +12,8 @@ namespace Maqar.Repository.Data
 {
     public class MaqarContext : IdentityDbContext<AppUser>
     {
-        public MaqarContext(DbContextOptions<MaqarContext> options)
+        public MaqarContext(DbContextOptions<MaqarContext> options) : base(options)
         {
-            
         }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

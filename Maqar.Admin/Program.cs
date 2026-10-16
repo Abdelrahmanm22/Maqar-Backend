@@ -1,15 +1,139 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Maqar.Admin.Authorization;
+using Maqar.Admin.Services;
+using Maqar.Domain;
+using Maqar.Domain.Authorization;
+using Maqar.Domain.Models.Identity;
+using Maqar.Domain.Repositories;
+using Maqar.Domain.Services;
+using Maqar.Domain.Services.Identity;
+using Maqar.Repository;
+using Maqar.Repository.Data;
+using Maqar.Repository.Storage;
+using Maqar.Services.Identity;
+
 namespace Maqar.Admin
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
+            #region Configure Serilog
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.Console()
+                .WriteTo.File(
+                    path: "Logs/log-.txt",
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 30,
+                    fileSizeLimitBytes: 10 * 1024 * 1024,
+                    rollOnFileSizeLimit: true,
+                    shared: true,
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .CreateLogger();
+            #endregion
 
-            // Add services to the container.
-            builder.Services.AddControllersWithViews();
+            var builder = WebApplication.CreateBuilder(args);
+            builder.Host.UseSerilog();
+
+            #region Configure Services
+
+            builder.Services.AddAutoMapper(typeof(Program).Assembly);
+            builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+            builder.Services.AddScoped<IFileStorageService>(_ => new FileStorageService(builder.Environment.WebRootPath));
+
+            // Who is making the request — Maqar.Repository / Maqar.Services must not see IHttpContextAccessor.
+            builder.Services.AddHttpContextAccessor();
+            builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+            builder.Services.AddControllersWithViews()
+                .AddRazorRuntimeCompilation()
+                .AddViewOptions(options =>
+                {
+                    options.HtmlHelperOptions.ClientValidationEnabled = true;
+                });
+
+            builder.Services.AddDbContext<MaqarContext>(options =>
+                options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+            builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+
+            builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
+            {
+                // Password policy
+                options.Password.RequireDigit = true;
+                options.Password.RequiredLength = 8;
+                options.Password.RequireNonAlphanumeric = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireLowercase = true;
+
+                // AppUserConfig puts a unique index on Email — let Identity catch duplicates
+                // as a clean IdentityResult error instead of a SQL constraint violation.
+                options.User.RequireUniqueEmail = true;
+            })
+                .AddEntityFrameworkStores<MaqarContext>()
+                .AddDefaultTokenProviders()
+                .AddClaimsPrincipalFactory<AppUserClaimsPrincipalFactory>();
+
+            #region Authorization (permission policies)
+
+            builder.Services.AddAuthorization();
+            builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+            builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
+            // Re-issues the auth cookie (re-running the claims factory) on this interval, so role and
+            // permission changes reach signed-in users without forcing them to log in again.
+            builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+                options.ValidationInterval = TimeSpan.FromMinutes(2));
+
+            builder.Services.AddScoped<IRoleService, RoleService>();
+            builder.Services.AddScoped<IUserAccountService, UserAccountService>();
+
+            #endregion
+
+            // Configure cookie to redirect to Login when unauthenticated
+            builder.Services.ConfigureApplicationCookie(options =>
+            {
+                options.LoginPath = "/Account/Login";
+                options.AccessDeniedPath = "/Account/AccessDenied";
+                options.ExpireTimeSpan = TimeSpan.FromHours(8);
+                options.SlidingExpiration = true;
+            });
+
+            #endregion
 
             var app = builder.Build();
+
+            #region Update-Database-on-Startup
+            using var scope = app.Services.CreateScope();
+            var services = scope.ServiceProvider;
+            try
+            {
+                var dbContext = services.GetRequiredService<MaqarContext>();
+                await dbContext.Database.MigrateAsync();
+
+                var gaps = PermissionCatalog.FindCatalogGaps();
+                if (gaps.Count > 0)
+                    Log.Warning("Permission catalog is inconsistent: {Gaps}", gaps);
+
+                var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+                var userManager = services.GetRequiredService<UserManager<AppUser>>();
+
+                await AppIdentityDbContextSeed.SeedRolesAsync(roleManager);
+                await AppIdentityDbContextSeed.SeedUserAsync(userManager, roleManager);
+                await AppIdentityDbContextSeed.AssignSuperAdminAsync(userManager);
+
+                var superAdmins = await userManager.GetUsersInRoleAsync(AppRoles.SuperAdmin);
+                Log.Information("Identity seed complete. {Count} user(s) hold {Role}: {Users}",
+                    superAdmins.Count, AppRoles.SuperAdmin, superAdmins.Select(u => u.UserName));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "An error occurred while applying database migrations.");
+            }
+            #endregion
 
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())
@@ -20,14 +144,22 @@ namespace Maqar.Admin
             }
 
             app.UseHttpsRedirection();
+
+            // MapStaticAssets (below) only serves assets present in the build-time
+            // manifest, so anything IFileStorageService writes at runtime — user
+            // avatars, later property images — 404s without this.
+            app.UseStaticFiles();
+
             app.UseRouting();
 
+            app.UseAuthentication(); // Must come before UseAuthorization
             app.UseAuthorization();
 
             app.MapStaticAssets();
             app.MapControllerRoute(
                 name: "default",
-                pattern: "{controller=Home}/{action=Index}/{id?}")
+                // Start on the Login page by default
+                pattern: "{controller=Account}/{action=Login}/{id?}")
                 .WithStaticAssets();
 
             app.Run();

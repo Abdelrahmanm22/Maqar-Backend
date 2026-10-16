@@ -62,14 +62,13 @@ Thumbs.db
 /data/
 
 # Runtime uploads (IFileStorageService writes here)
-Travel.Presentation/wwwroot/Files/
+Maqar.Admin/wwwroot/Files/
 
 # Temporary files
 *.tmp
 *.temp
 
 # Uploaded files
-Tasks.Presentation/wwwroot/Files/
 wwwroot/Files/
 
 # Production configuration / secrets

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Maqar.Domain.Models;
+using Maqar.Domain.Specifications;
 
 namespace Maqar.Domain.Repositories
 {

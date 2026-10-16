@@ -1,0 +1,46 @@
+<div class="vertical-menu">
+
+    <div data-simplebar class="h-100">
+
+        <!--- Sidemenu -->
+        <div id="sidebar-menu">
+            <!-- Left Menu Start -->
+            <ul class="metismenu list-unstyled" id="side-menu">
+
+                <li class="menu-title">Menu</li>
+
+                <li>
+                    <a asp-controller="Home" asp-action="Index" class="waves-effect">
+                        <i class="bx bx-home-circle"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+
+                @* Property-hub modules (Properties, Areas, Features, Contact Messages) go here as they are
+                   built — one <permission> wrapper per item, plus a mode="any" wrapper for the heading. *@
+
+                <permission required="@Permissions.Users.View,@Permissions.Roles.View" mode="any">
+                    <li class="menu-title">Administration</li>
+                </permission>
+                <permission required="@Permissions.Users.View">
+                    <li>
+                        <a asp-controller="User" asp-action="Index" class="waves-effect">
+                            <i class="bx bx-group"></i>
+                            <span>Users</span>
+                        </a>
+                    </li>
+                </permission>
+                <permission required="@Permissions.Roles.View">
+                    <li>
+                        <a asp-controller="Role" asp-action="Index" class="waves-effect">
+                            <i class="bx bx-shield-quarter"></i>
+                            <span>Roles</span>
+                        </a>
+                    </li>
+                </permission>
+
+            </ul>
+        </div>
+        <!-- Sidebar -->
+    </div>
+</div>

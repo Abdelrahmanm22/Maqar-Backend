@@ -1,15 +1,17 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Maqar.Domain.Models;
+using Maqar.Domain.Repositories;
 using Maqar.Domain.Specifications;
 using Maqar.Repository.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Maqar.Repository
 {
-    public class GenericRepository<T> where T : BaseModel
+    public class GenericRepository<T> : IGenericRepository<T> where T : BaseModel
     {
         private readonly MaqarContext dbContext;
 

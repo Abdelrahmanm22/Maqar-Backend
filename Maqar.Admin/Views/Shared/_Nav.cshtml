@@ -1,0 +1,106 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using Maqar.Domain.Models.Identity
+@using Maqar.Admin.Helpers
+@inject UserManager<AppUser> UserManager
+@{
+	var currentUser = await UserManager.GetUserAsync(User);
+	var displayName = currentUser?.FullName ?? User.Identity?.Name ?? "User";
+	var avatarSrc = AvatarHelper.Resolve(currentUser?.ImageUrl, currentUser?.Gender ?? Maqar.Domain.Enums.Gender.Male);
+}
+<header id="page-topbar">
+	<div class="navbar-header">
+		<div class="d-flex">
+			<!-- LOGO -->
+			<div class="navbar-brand-box">
+				<a asp-controller="Home" asp-action="Index" class="logo logo-dark">
+					<span class="logo-sm">
+						<img src="~/back/assets/images/Logo_Maqar_Icon.png" alt="Maqar Admin" height="30">
+					</span>
+					<span class="logo-lg">
+						<img src="~/back/assets/images/Logo_Maqar.png" alt="Maqar Admin" height="40">
+					</span>
+				</a>
+
+				<a asp-controller="Home" asp-action="Index" class="logo logo-light">
+					<span class="logo-sm">
+						<img src="~/back/assets/images/Logo_Maqar_Icon.png" alt="Maqar Admin" height="30">
+					</span>
+					<span class="logo-lg">
+						<img src="~/back/assets/images/Logo_Maqar_Dark.png" alt="Maqar Admin" height="40">
+					</span>
+				</a>
+			</div>
+
+			<button type="button" class="btn btn-sm px-3 font-size-16 header-item waves-effect" id="vertical-menu-btn">
+				<i class="fa fa-fw fa-bars"></i>
+			</button>
+		</div>
+
+		<div class="d-flex">
+
+			<!-- Full screen toggle -->
+			<div class="dropdown d-none d-lg-inline-block ms-1">
+				<button type="button" class="btn header-item noti-icon waves-effect" data-toggle="fullscreen">
+					<i class="bx bx-fullscreen"></i>
+				</button>
+			</div>
+			<!-- Notifications dropdown -->
+			<!-- <div class="dropdown d-inline-block">
+				<button type="button" class="btn header-item noti-icon waves-effect position-relative"
+						id="page-header-notifications-dropdown"
+						data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+					<i class="bx bx-bell bx-tada"></i>
+					<span id="notification-badge" class="badge bg-danger rounded-pill d-none">0</span>
+				</button>
+				<div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
+					 aria-labelledby="page-header-notifications-dropdown">
+					<div class="p-3">
+						<div class="row align-items-center">
+							<div class="col">
+								<h6 class="m-0">Notifications</h6>
+							</div>
+							<div class="col-auto">
+								<a href="javascript:void(0);" id="mark-all-read" class="small text-reset text-decoration-underline">Mark all as read</a>
+							</div>
+						</div>
+					</div>
+					<div data-simplebar style="max-height: 250px;">
+						<div id="notification-list"></div>
+						<div id="notification-empty" class="text-muted text-center small py-4 d-none">No new notifications</div>
+					</div>
+					<div class="p-2 border-top d-grid">
+						<a class="btn btn-sm btn-link font-size-14 text-center" asp-controller="Notification" asp-action="Index">
+							<i class="mdi mdi-arrow-right-circle me-1"></i> View all
+						</a>
+					</div>
+				</div>
+			</div> -->
+
+			<!-- User dropdown -->
+			<div class="dropdown d-inline-block">
+				<button type="button" class="btn header-item waves-effect" id="page-header-user-dropdown"
+						data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+					<img class="rounded-circle header-profile-user" src="@avatarSrc" alt="Profile">
+					<span class="d-none d-xl-inline-block ms-1">@displayName</span>
+					<i class="mdi mdi-chevron-down d-none d-xl-inline-block"></i>
+				</button>
+				<div class="dropdown-menu dropdown-menu-end">
+					<!-- Logout -->
+					<a class="dropdown-item text-danger"
+					   asp-controller="Account" asp-action="SignOut">
+						<i class="bx bx-power-off font-size-16 align-middle me-1 text-danger"></i>
+						<span>Logout</span>
+					</a>
+				</div>
+			</div>
+
+			<!-- Settings sidebar toggle -->
+			<div class="dropdown d-inline-block">
+				<button type="button" class="btn header-item noti-icon right-bar-toggle waves-effect">
+					<i class="bx bx-cog bx-spin"></i>
+				</button>
+			</div>
+
+		</div>
+	</div>
+</header>
