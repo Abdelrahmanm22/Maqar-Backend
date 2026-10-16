@@ -7,7 +7,7 @@ The **backend** for **Maqar (مَقَر)**, an Egyptian real-estate listings sit
 - **`Maqar.Admin`**: a **.NET 9 MVC** admin dashboard (server-rendered Razor, Skote template). Staff manage listings, users and roles here.
 - **`Maqar.Api`**: a **.NET 9 Web API** that the public site will call. No endpoints exist yet; the project is wired to the layers and waiting for them.
 
-The public site is a separate repo: **`D:\My Career\maqar-properties-hub`**. It is TanStack Start + React 19, Arabic/English with RTL, and currently runs on mock data. Its data shapes are the **contract this API must serve**; see [Frontend Contract](#frontend-contract-future-api) below.
+The public site is a separate repo: **`D:\My Career\maqar-properties-hub`**. It is TanStack Start + React 19, Arabic/English with RTL, and currently runs on mock data. Its data shapes are the **contract this API must serve**; see [Frontend Contract](#frontend-contract-api) below.
 
 The architecture is cloned from the sibling project **`D:\My Career\ASP.NET\MyProjects\Travelling management`**. Onion layers, Generic Repository + Specification, Unit of Work, and claims-based RBAC are all ported from it. When a pattern here is unclear, that project's `CLAUDE.md` is the long-form reference.
 
@@ -31,8 +31,10 @@ The architecture is cloned from the sibling project **`D:\My Career\ASP.NET\MyPr
 ```
 Maqar.Domain       (Core — zero project references)
     ├── Authorization/     (Permissions, PermissionCatalog, PermissionClaims, AppRoles, AppClaimTypes)
-    ├── Enums/             (Gender)
-    ├── Models/            (BaseModel; Models/Identity/AppUser)
+    ├── Enums/             (Gender, PropertyType, ListingType, RentalUnit, FinishingType,
+    │                       PropertyStatus, ContactMessageStatus)
+    ├── Models/            (BaseModel, IAuditableEntity, ISoftDeletable; Property, PropertyImage,
+    │                       Area, Feature, ContactMessage; Models/Identity/AppUser)
     ├── Repositories/      (IGenericRepository<T>)
     ├── Services/          (interfaces + DTOs only — OperationResult, ICurrentUserService,
     │                       IFileStorageService, Identity/IRoleService, Identity/IUserAccountService)
@@ -40,10 +42,10 @@ Maqar.Domain       (Core — zero project references)
     └── IUnitOfWork.cs
 
 Maqar.Repository   (Infrastructure — references Maqar.Domain)
-    ├── Data/MaqarContext.cs               (IdentityDbContext<AppUser>)
+    ├── Data/MaqarContext.cs               (IdentityDbContext<AppUser>; audit stamping + soft delete in SaveChanges)
     ├── Data/Configrations/                (Fluent API per entity — "Configrations" typo kept from Travel; don't rename)
     ├── Data/AppIdentityDbContextSeed.cs   (SuperAdmin role + MaqarAdmin user)
-    ├── Data/Migrations/                   (InitialIdentity)
+    ├── Data/Migrations/                   (InitialIdentity, AddPropertiesDomain)
     ├── GenericRepository.cs
     ├── SpecificationEvalutor.cs           (typo intentional — keep it)
     ├── Storage/FileStorageService.cs      (IFileStorageService impl — disk-backed under wwwroot/Files)
@@ -107,11 +109,37 @@ Keep the EF/Identity packages on **one version** across projects (currently 9.0.
   - Properties: `FirstName`, `LastName`, `FullName` (computed), `Gender`, `IsActive` (default true), `ImageUrl?`.
   - Configured in `AppUserConfig`: FirstName/LastName required, max 100; ImageUrl max 500; unique indexes on UserName and Email.
 
-No real-estate entities yet. See [Frontend Contract](#frontend-contract-future-api) for the planned ones.
+### Real-estate domain (`Maqar.Domain/Models/`, configs in `Maqar.Repository/Data/Configrations/`)
 
-| Enum | Values | Location |
+Bilingual text is stored as **`Ar` / `En` column pairs**. API DTOs fold them into the frontend's `{ ar, en }`.
+
+| Entity | Key fields | Relationships / rules |
 |---|---|---|
-| `Gender` | `Male=1`, `Female=2` | `Maqar.Domain/Enums/` |
+| **`Property`** : `IAuditableEntity`, `ISoftDeletable` | **Classification:** `Type`, `ListingType`, `RentalUnit?`, `Status` (C# default Draft), `IsFeatured`<br>**Price:** `Price` (decimal 18,2, EGP: total for sale, monthly for rent), `IsNegotiable`<br>**Specs:** `Bedrooms?`, `Bathrooms?`, `Size` (m², decimal 18,2), `Finishing?`, `Floor?`<br>**Text:** `TitleAr/En` (200), `DescriptionAr/En` (max), `LocationAr/En` (250)<br>**Coordinates:** `Latitude?` / `Longitude?` (decimal 9,6)<br>**Audit:** `CreatedById?` | **Area:** `AreaId` → Area, **Restrict**<br>**CreatedBy:** `CreatedById` → AppUser, **SetNull**<br>**Images:** Cascade<br>**Features:** many-to-many through the **`PropertyFeatures`** table (`PropertyId`, `FeatureId`), Cascade on both sides<br>**ContactMessages:** one-to-many<br>**Check constraint** `CK_Properties_RentalUnit`: `RentalUnit` only on rentals<br>**Query filter:** `!IsDeleted` |
+| **`PropertyImage`** | `ImageUrl` (500), `DisplayOrder`, `IsCover` | Cascade from Property<br>The query filter (`!Property.IsDeleted`) mirrors Property's<br>"Exactly one cover" is a service rule, not a DB rule |
+| **`Area`** | `Key` (50, unique), `NameAr/En` (100), `DisplayOrder`, `IsActive` | Seeded (`HasData`, Ids 1–5) with the frontend's `AreaKey` values |
+| **`Feature`** | `Key` (50, unique), `NameAr/En` (100), `Icon?` (50, Boxicons), `DisplayOrder`, `IsActive` | Seeded (Ids 1–8) with the frontend's `FeatureKey` values and its locale labels |
+| **`ContactMessage`** : `IAuditableEntity` | `Name` (100), `Email` (256), `Phone` (30), `Message` (2000), `Status` (C# default New) | `PropertyId?` → Property, **SetNull**: null for the general form, set for a listing inquiry<br>Index on `(Status, CreatedAt)` |
+
+**Property indexes:**
+- the public listing filter `(Status, IsDeleted, ListingType, Type, AreaId)`
+- `Price`, `CreatedAt`, `IsFeatured`, and the FK indexes.
+
+**Rules:**
+- **`Area.Key` / `Feature.Key` are the API contract.** The frontend filters and translates by them, so never rename a seeded key.
+- **Nullable specs:** `Bedrooms`, `Bathrooms` and `Finishing` are nullable (land, shops). The current frontend expects numbers, so DTOs map `null` to `0` until it is updated.
+
+| Enum (all start at 1, stored as int) | Values |
+|---|---|
+| `Gender` | `Male`, `Female` |
+| `PropertyType` | `Apartment`, `Villa`, `Shop`, `Land`, `Building` |
+| `ListingType` | `Sale`, `Rent` |
+| `RentalUnit` | `Whole`, `Room`, `Bed`. Rent only; a Room or Bed listing's specs describe the room |
+| `FinishingType` | `SuperLux`, `Lux`, `SemiFinished`, `Core` |
+| `PropertyStatus` | `Draft`, `Published`, `Sold`, `Rented`, `Archived`. **Only `Published` is public** |
+| `ContactMessageStatus` | `New`, `Read`, `Replied`, `Archived` |
+
+API DTOs map enum values to the frontend's camelCase keys (`SuperLux` → `"superLux"`, `Sale` → `"sale"`).
 
 ---
 
@@ -179,6 +207,22 @@ Only `Maqar.Admin` registers these today. `Maqar.Api` registers just the DbConte
 
 - **`MaqarContext : IdentityDbContext<AppUser>`**, configured through `ApplyConfigurationsFromAssembly`.
 - When you add an entity: add a `DbSet`, a `{Entity}Config` in `Data/Configrations/`, and a migration.
+- **DbSets:** `Properties`, `PropertyImages`, `Areas`, `Features`, `ContactMessages`.
+
+**Audit stamping and soft delete live in `MaqarContext.SaveChanges` / `SaveChangesAsync`:**
+- **`IAuditableEntity`:**
+  - `Added` stamps `CreatedAt`.
+  - `Modified` stamps `UpdatedAt` and marks `CreatedAt` as **not modified**, so a detached `Update()` can't zero it.
+  - Never set these by hand.
+- **`ISoftDeletable`:**
+  - A `Deleted` entry becomes `Modified` with `IsDeleted = true` and `DeletedAt` set.
+  - So `_unitOfWork.Repository<Property>().Delete(p)` is already a soft delete.
+  - The global query filter hides the row. Use `IgnoreQueryFilters()` to see it.
+- **`ChangeTracker.CascadeDeleteTiming = OnSaveChanges`** is load-bearing.
+  - With the default (`Immediate`), `Remove(property)` cascade-deletes the tracked images and feature links on the spot, before `SaveChanges` can turn the delete into a soft one, and that hard-deletes them.
+  - Verified 2026-10-16: after soft-deleting a property loaded with images and features, both survived.
+- **`CreatedById` is not stamped by the context.** The creating service sets it from `ICurrentUserService`, because Repository must not depend on the web layer.
+- **Hard delete:** `IgnoreQueryFilters().Where(...).ExecuteDeleteAsync()` bypasses `SaveChanges` and cascades in SQL.
 
 **Migrations** (run from the solution root):
 ```
@@ -196,7 +240,7 @@ Server=.;Database=MaqarDB;Trusted_Connection=True;MultipleActiveResultSets=true;
 **Guardrails:**
 - **SQL Server cascade cycles (error 1785):** use `Cascade` only for ownership FKs (e.g. Property → PropertyImages) and `NoAction` for reference FKs (e.g. Property → Area).
 - **Nullable columns in a unique index need `.HasFilter("[Col] IS NOT NULL")`.** SQL Server treats NULLs as equal.
-- **Don't `HasDefaultValue(1)` on an enum property.** Initialise the default in C# instead.
+- **Don't put DB defaults (`HasDefaultValue`) on enum or bool properties.** EF treats the CLR default (`0` / `false`) as "not set" and sends nothing, so the DB default wins: an explicit `IsActive = false` would be saved as `true`. Initialise defaults in C# instead. (`AppUserConfig` still has `IsActive` with `HasDefaultValue(true)`, inherited from Travel; see Gotchas.)
 - **`sqlcmd` deletes on Identity tables need `-I`** (QUOTED_IDENTIFIER ON) because of the filtered unique indexes.
 
 ---
@@ -253,14 +297,23 @@ Claims-based permissions on top of ASP.NET Identity. **There is no Permission ta
 | `PermissionClaims.cs` | `Pack` / `Unpack`. The cookie carries **one** comma-joined permission claim; the DB keeps one row each |
 | `AppRoles.cs` | `SuperAdmin` + `IsProtected(name)`. Named `AppRoles` so it doesn't clash with `Permissions.Roles` |
 
-**Current modules (13 permissions):**
-- **Users** (Order 1): `View`, `Create`, `Edit`, `Delete`, `ToggleActive`, `ResetPassword`, `AssignRoles`, `ManagePermissions`.
-- **Roles** (Order 2): `View`, `Create`, `Edit`, `Delete`, `ManagePermissions`.
+**Current modules (30 permissions):**
 
-**Adding a module** (do this for Properties, Areas, Features, ContactMessages):
+| Module (Order) | Permissions |
+|---|---|
+| **Users** (1) | `View`, `Create`, `Edit`, `Delete`, `ToggleActive`, `ResetPassword`, `AssignRoles`, `ManagePermissions` |
+| **Roles** (2) | `View`, `Create`, `Edit`, `Delete`, `ManagePermissions` |
+| **Properties** (3) | `View`, `Create`, `Edit`, `Delete`, `Publish` (change status), `Feature` (toggle featured) |
+| **Areas** (4) | `View`, `Create`, `Edit`, `Delete` |
+| **Features** (5) | `View`, `Create`, `Edit`, `Delete` |
+| **ContactMessages** (6) | `View`, `ChangeStatus`, `Delete` |
+
+Steps 1–3 below are already done for the four property-hub modules. They have **no screens or sidebar items yet**, so steps 4–5 come with their CRUD pages.
+
+**Adding a module:**
 1. Add a nested class of consts to `Permissions.cs`.
 2. Add a matching `new("Key", "Display", Order, [...])` entry to `PermissionCatalog.Modules`. Append it; inserting mid-list means renumbering every later `Order`.
-3. Add an icon to `Maqar.Admin/Helpers/PermissionIcons.cs`, keyed by the same module `Key`.
+3. Add an icon to `Maqar.Admin/Helpers/PermissionIcons.cs`, keyed by the same module `Key`. Icons show on the Role/User **Details** pages, not in the picker cards.
 4. Gate controller actions with `[Authorize(Policy = Permissions.X.Y)]`, keeping class-level `[Authorize]`.
 5. Add sidebar items in `_Sidebar.cshtml`, each wrapped in `<permission required="...">`, with a `mode="any"` wrapper around the section heading.
 
@@ -318,9 +371,9 @@ Rules:
 
 ---
 
-## Frontend Contract (future API)
+## Frontend Contract (API)
 
-From `D:\My Career\maqar-properties-hub\src\data\properties.ts`. Nothing below is implemented yet.
+From `D:\My Career\maqar-properties-hub\src\data\properties.ts`. **The models are implemented (see Domain Models); the endpoints and DTOs are not yet.**
 
 - **Property:**
   - `id`, `type` (`apartment|villa|shop|land|building`), `listingType` (`sale|rent`).
@@ -341,8 +394,14 @@ From `D:\My Career\maqar-properties-hub\src\data\properties.ts`. Nothing below i
   - featured listings
   - area/feature lookups
   - `POST /api/contact` (name, email, phone, message)
-- **Likely entities:** `Property`, `Area`, `Feature` (many-to-many with Property), `PropertyImage` (Property owns many), `ContactMessage`.
-  - Store the localized text as `TitleAr`/`TitleEn`-style column pairs, or as an owned type, and map them to `{ ar, en }` in DTOs.
+- **How the DTO fields map to the model:**
+  - `featured` ← `IsFeatured`
+  - `area` ← `Area.Key`
+  - `features[]` ← `Features[].Key`
+  - `images[]` ← `Images` ordered by `DisplayOrder`, cover first
+  - `createdAt` ← `CreatedAt:yyyy-MM-dd`
+  - `title` ← `{ ar: TitleAr, en: TitleEn }`, and the same for `location` and `description`
+- **Public endpoints filter on `Status == Published`.** The soft-delete filter is automatic.
 
 ---
 
@@ -432,6 +491,11 @@ They render detached in this template; Travel tried and abandoned them. Show the
 - **`dotnet run --no-build` right after `dotnet ef migrations add` runs the OLD DLL.** The migration isn't compiled in, `MigrateAsync` applies nothing, and seeding fails with `Invalid object name 'AspNetRoles'`. Build first.
 - **A running `Maqar.Admin` locks `bin/`,** so the next build fails with MSB3027. Stop the process first: `Get-Process Maqar.Admin | Stop-Process`.
 - **A bulk `Travel.` → `Maqar.` rename also hit asset names.** `Logo_MustaTravel.png` became `Logo_MustaMaqar.png`, which doesn't exist. After any bulk rename, grep for file references.
+
+### 2026-10-16 — v2: real-estate domain models
+- **`CascadeDeleteTiming.Immediate` (the EF default) defeats soft delete for tracked children.** `Remove()` marks loaded dependents `Deleted` immediately, so they are hard-deleted even though `SaveChanges` turns the parent into a soft delete. `MaqarContext` sets `OnSaveChanges`. Don't remove it.
+- **`HasDefaultValue(true)` on a bool is a trap.** It was removed from `Area`/`Feature.IsActive` before the migration. **`AppUserConfig.IsActive` still has it**, inherited from Travel. Creating a user with `IsActive = false` is likely saved as active; this is not verified yet. Fix it by dropping the default and adding a migration.
+- **The EF tools are 10.0.8 while the runtime is 9.0.21.** Migrations generate fine. Upgrade the tools only together with the packages.
 
 ### Reusable guardrails (apply as the domain is built)
 - **Roles and users can't go through `IUnitOfWork.Repository<T>()`.** It requires `BaseModel`, which has an int Id, and Identity uses string Ids. Use `UserManager`/`RoleManager`. They share the scoped `MaqarContext`, so `BeginTransactionAsync` still makes multi-claim changes atomic.

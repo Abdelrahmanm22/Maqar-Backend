@@ -27,5 +27,38 @@ namespace Maqar.Domain.Authorization
             public const string Delete = "Roles.Delete";
             public const string ManagePermissions = "Roles.ManagePermissions";
         }
+
+        public static class Properties
+        {
+            public const string View = "Properties.View";
+            public const string Create = "Properties.Create";
+            public const string Edit = "Properties.Edit";
+            public const string Delete = "Properties.Delete";
+            public const string Publish = "Properties.Publish";
+            public const string Feature = "Properties.Feature";
+        }
+
+        public static class Areas
+        {
+            public const string View = "Areas.View";
+            public const string Create = "Areas.Create";
+            public const string Edit = "Areas.Edit";
+            public const string Delete = "Areas.Delete";
+        }
+
+        public static class Features
+        {
+            public const string View = "Features.View";
+            public const string Create = "Features.Create";
+            public const string Edit = "Features.Edit";
+            public const string Delete = "Features.Delete";
+        }
+
+        public static class ContactMessages
+        {
+            public const string View = "ContactMessages.View";
+            public const string ChangeStatus = "ContactMessages.ChangeStatus";
+            public const string Delete = "ContactMessages.Delete";
+        }
     }
 }

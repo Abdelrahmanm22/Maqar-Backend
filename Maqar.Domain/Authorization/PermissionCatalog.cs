@@ -42,6 +42,46 @@ namespace Maqar.Domain.Authorization
                 new PermissionDescriptor(Permissions.Roles.ManagePermissions, "Manage role permissions",
                     "Change which permissions a role grants."),
             }),
+            // Appended rather than inserted, so Users/Roles keep their Order.
+            new("Properties", "Properties", 3, new[]
+            {
+                new PermissionDescriptor(Permissions.Properties.View, "View properties",
+                    "See every listing, including drafts and archived ones."),
+                new PermissionDescriptor(Permissions.Properties.Create, "Create properties"),
+                new PermissionDescriptor(Permissions.Properties.Edit, "Edit properties",
+                    "Change a listing's details, price and images."),
+                new PermissionDescriptor(Permissions.Properties.Delete, "Delete properties",
+                    "Remove a listing. It is soft-deleted and disappears from the site."),
+                new PermissionDescriptor(Permissions.Properties.Publish, "Change property status",
+                    "Publish, unpublish, or mark a listing sold, rented or archived. Only published listings appear on the public site."),
+                new PermissionDescriptor(Permissions.Properties.Feature, "Feature properties",
+                    "Choose which listings appear in the featured section of the home page."),
+            }),
+            new("Areas", "Areas", 4, new[]
+            {
+                new PermissionDescriptor(Permissions.Areas.View, "View areas"),
+                new PermissionDescriptor(Permissions.Areas.Create, "Create areas"),
+                new PermissionDescriptor(Permissions.Areas.Edit, "Edit areas"),
+                new PermissionDescriptor(Permissions.Areas.Delete, "Delete areas",
+                    "Only an area with no listings can be deleted."),
+            }),
+            new("Features", "Features", 5, new[]
+            {
+                new PermissionDescriptor(Permissions.Features.View, "View features",
+                    "See the amenities catalogue (elevator, pool, …) and pick features on a listing."),
+                new PermissionDescriptor(Permissions.Features.Create, "Create features"),
+                new PermissionDescriptor(Permissions.Features.Edit, "Edit features"),
+                new PermissionDescriptor(Permissions.Features.Delete, "Delete features",
+                    "Also removes the feature from every listing that has it."),
+            }),
+            new("ContactMessages", "Contact Messages", 6, new[]
+            {
+                new PermissionDescriptor(Permissions.ContactMessages.View, "View contact messages",
+                    "Read messages and listing inquiries sent from the public site."),
+                new PermissionDescriptor(Permissions.ContactMessages.ChangeStatus, "Change message status",
+                    "Mark a message read, replied or archived."),
+                new PermissionDescriptor(Permissions.ContactMessages.Delete, "Delete contact messages"),
+            }),
         }
         .OrderBy(m => m.Order)
         .ToList();

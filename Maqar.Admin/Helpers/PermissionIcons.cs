@@ -9,6 +9,10 @@ namespace Maqar.Admin.Helpers
         {
             ["Users"] = "bx-group",
             ["Roles"] = "bx-shield-quarter",
+            ["Properties"] = "bx-building-house",
+            ["Areas"] = "bx-map-pin",
+            ["Features"] = "bx-list-check",
+            ["ContactMessages"] = "bx-envelope",
         };
 
         public static string For(string moduleKey) =>
