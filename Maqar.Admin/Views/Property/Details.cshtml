@@ -1,0 +1,285 @@
+@using Maqar.Admin.Helpers
+@using Maqar.Domain.Enums
+@model Maqar.Admin.ViewModels.PropertyDetailsViewModel
+@{
+    var p = Model.Property;
+    ViewData["Title"] = p.TitleEn;
+    var status = PropertyBadges.ForStatus(p.Status);
+    var images = p.Images.OrderByDescending(i => i.IsCover).ThenBy(i => i.DisplayOrder).ToList();
+    var isLand = p.Type == PropertyType.Land;
+}
+
+<link href="~/back/assets/libs/magnific-popup/magnific-popup.css" rel="stylesheet" type="text/css" />
+
+@Html.AntiForgeryToken()
+
+@* ─── Action bar ───────────────────────────────────────────────────────── *@
+<div class="card">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div class="min-width-0">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <span class="badge @status.CssClass font-size-12"><i class="bx @status.Icon me-1"></i>@status.Label</span>
+                <span class="badge @PropertyBadges.ListingCss(p.ListingType) font-size-12">@PropertyBadges.ListingLabel(p.ListingType)</span>
+                @if (p.IsFeatured)
+                {
+                    <span class="badge bg-warning-subtle text-warning font-size-12"><i class="bx bxs-star me-1"></i>Featured</span>
+                }
+                <span class="text-muted">#@p.Id</span>
+            </div>
+            <h4 class="mb-0 text-truncate">@p.TitleEn</h4>
+            <div class="text-muted" dir="rtl" lang="ar">@p.TitleAr</div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <permission required="@Permissions.Properties.Publish">
+                <div class="dropdown">
+                    <button class="btn btn-soft-success dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bx bx-check-circle me-1"></i> Status <i class="mdi mdi-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end">
+                        @foreach (var s in Enum.GetValues<PropertyStatus>())
+                        {
+                            // Sold only fits a sale, Rented only a rental — PropertyService enforces the same rule.
+                            if (s == p.Status
+                                || (s == PropertyStatus.Sold && p.ListingType != ListingType.Sale)
+                                || (s == PropertyStatus.Rented && p.ListingType != ListingType.Rent))
+                            {
+                                continue;
+                            }
+                            var badge = PropertyBadges.ForStatus(s);
+                            <button type="button" class="dropdown-item js-status" data-status="@s" data-label="@badge.Label">
+                                <i class="bx @badge.Icon me-1"></i> @(s == PropertyStatus.Published ? "Publish" : "Mark " + badge.Label.ToLowerInvariant())
+                            </button>
+                        }
+                    </div>
+                </div>
+            </permission>
+            <permission required="@Permissions.Properties.Feature">
+                <button type="button" class="btn btn-soft-warning js-featured" data-featured="@(p.IsFeatured ? "false" : "true")">
+                    <i class="bx @(p.IsFeatured ? "bx-star" : "bxs-star") me-1"></i> @(p.IsFeatured ? "Unfeature" : "Feature")
+                </button>
+            </permission>
+            <permission required="@Permissions.Properties.Edit">
+                <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-primary"><i class="bx bx-pencil me-1"></i> Edit</a>
+            </permission>
+            <permission required="@Permissions.Properties.Delete">
+                <button type="button" class="btn btn-soft-danger js-delete"><i class="bx bx-trash me-1"></i> Delete</button>
+            </permission>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-8">
+        @* ─── Gallery ───────────────────────────────────────────────────── *@
+        <div class="card">
+            <div class="card-body">
+                @if (images.Count == 0)
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="bx bx-image font-size-24 d-block mb-2"></i>
+                        No images yet — a listing needs at least one before it can be published.
+                    </div>
+                }
+                else
+                {
+                    <a href="@images[0].ImageUrl" class="js-gallery d-block mb-3">
+                        <img src="@images[0].ImageUrl" class="rounded w-100 property-hero" alt="@p.TitleEn" />
+                    </a>
+                    @if (images.Count > 1)
+                    {
+                        <div class="row row-cols-3 row-cols-md-6 g-2">
+                            @foreach (var img in images.Skip(1))
+                            {
+                                <div class="col">
+                                    <a href="@img.ImageUrl" class="js-gallery"><img src="@img.ImageUrl" class="rounded w-100 property-gallery-thumb" alt="" /></a>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ─── Description ───────────────────────────────────────────────── *@
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Description</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3 mb-md-0">
+                        <h6 class="text-muted font-size-12 text-uppercase">English</h6>
+                        <p class="mb-0" style="white-space:pre-line">@p.DescriptionEn</p>
+                    </div>
+                    <div class="col-md-6" dir="rtl" lang="ar">
+                        <h6 class="text-muted font-size-12">العربية</h6>
+                        <p class="mb-0" style="white-space:pre-line">@p.DescriptionAr</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ─── Inquiries ─────────────────────────────────────────────────── *@
+        @if (Model.CanViewInquiries)
+        {
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Inquiries <span class="badge bg-secondary-subtle text-secondary">@Model.Inquiries.Count</span></h5>
+                    @if (Model.Inquiries.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No inquiries about this listing yet.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var m in Model.Inquiries)
+                            {
+                                var mb = PropertyBadges.ForMessage(m.Status);
+                                <a asp-controller="ContactMessage" asp-action="Details" asp-route-id="@m.Id" class="list-group-item list-group-item-action px-0">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <span class="fw-semibold">@m.Name</span>
+                                        <span class="badge @mb.CssClass">@mb.Label</span>
+                                    </div>
+                                    <div class="text-muted font-size-12 text-truncate">@m.Message</div>
+                                    <div class="text-muted font-size-12">@m.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-xl-4">
+        @* ─── Facts ─────────────────────────────────────────────────────── *@
+        <div class="card">
+            <div class="card-body">
+                <h3 class="text-primary mb-0">@PropertyBadges.Price(p.Price, p.ListingType)</h3>
+                @if (p.IsNegotiable)
+                {
+                    <small class="text-muted">Negotiable</small>
+                }
+
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm table-nowrap mb-0">
+                        <tbody>
+                            <tr><th class="text-muted fw-normal">Type</th><td><i class="bx @PropertyBadges.TypeIcon(p.Type) me-1"></i>@PropertyBadges.TypeLabel(p.Type)</td></tr>
+                            @if (p.ListingType == ListingType.Rent)
+                            {
+                                <tr><th class="text-muted fw-normal">Rented as</th><td>@PropertyBadges.RentalUnitLabel(p.RentalUnit)</td></tr>
+                            }
+                            <tr><th class="text-muted fw-normal">Size</th><td>@p.Size.ToString("0.##") m²</td></tr>
+                            @if (!isLand)
+                            {
+                                <tr><th class="text-muted fw-normal">Bedrooms</th><td>@(p.Bedrooms?.ToString() ?? "—")</td></tr>
+                                <tr><th class="text-muted fw-normal">Bathrooms</th><td>@(p.Bathrooms?.ToString() ?? "—")</td></tr>
+                                <tr><th class="text-muted fw-normal">Finishing</th><td>@PropertyBadges.FinishingLabel(p.Finishing)</td></tr>
+                                <tr><th class="text-muted fw-normal">Floor</th><td>@(p.Floor?.ToString() ?? "—")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><i class="bx bx-map text-primary me-1"></i> Location</h5>
+                <p class="mb-1 fw-semibold">@p.Area.NameEn <span class="text-muted fw-normal" dir="rtl">· @p.Area.NameAr</span></p>
+                <p class="mb-1">@p.LocationEn</p>
+                <p class="mb-2 text-muted" dir="rtl" lang="ar">@p.LocationAr</p>
+                @if (p.Latitude is not null && p.Longitude is not null)
+                {
+                    <a href="https://www.google.com/maps?q=@p.Latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),@p.Longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                       target="_blank" rel="noopener" class="btn btn-sm btn-soft-primary">
+                        <i class="bx bx-link-external me-1"></i> Open in Google Maps
+                    </a>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><i class="bx bx-list-check text-primary me-1"></i> Features</h5>
+                @if (p.Features.Count == 0)
+                {
+                    <p class="text-muted mb-0">None listed.</p>
+                }
+                else
+                {
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var f in p.Features.OrderBy(f => f.DisplayOrder))
+                        {
+                            <span class="badge bg-primary-subtle text-primary font-size-12">
+                                @if (!string.IsNullOrEmpty(f.Icon))
+                                {
+                                    <i class="bx @f.Icon me-1"></i>
+                                }
+                                @f.NameEn
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body text-muted font-size-13">
+                <div><i class="bx bx-user me-1"></i> Added by <strong class="text-body">@(p.CreatedBy?.FullName ?? "a deleted user")</strong></div>
+                <div><i class="bx bx-calendar me-1"></i> Created @p.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                @if (p.UpdatedAt is not null)
+                {
+                    <div><i class="bx bx-time-five me-1"></i> Updated @p.UpdatedAt.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/back/assets/libs/magnific-popup/jquery.magnific-popup.min.js"></script>
+    <script>
+        $(function () {
+            var id = @p.Id;
+            var token = $('input[name="__RequestVerificationToken"]').val();
+
+            $('.js-gallery').magnificPopup({ type: 'image', gallery: { enabled: true } });
+
+            function post(url, data, reloadTo) {
+                data.__RequestVerificationToken = token;
+                return $.post(url, data)
+                    .done(function (res) {
+                        if (res.success) {
+                            toastr.success(res.message);
+                            setTimeout(function () { reloadTo ? (location.href = reloadTo) : location.reload(); }, 700);
+                        } else {
+                            toastr.error(res.message);
+                        }
+                    })
+                    .fail(function () { toastr.error('Something went wrong. Please try again.'); });
+            }
+
+            $('.js-status').on('click', function () {
+                post('@Url.Action("ChangeStatus")', { id: id, status: $(this).data('status') });
+            });
+
+            $('.js-featured').on('click', function () {
+                post('@Url.Action("ToggleFeatured")', { id: id, isFeatured: $(this).data('featured') });
+            });
+
+            $('.js-delete').on('click', function () {
+                Swal.fire({
+                    title: 'Delete property?',
+                    text: 'It will be removed from the dashboard and the public site.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#f46a6a',
+                    cancelButtonColor: '#74788d',
+                    confirmButtonText: 'Yes, delete it'
+                }).then(function (result) {
+                    if (result.isConfirmed) post('@Url.Action("Delete")', { id: id }, '@Url.Action("Index")');
+                });
+            });
+        });
+    </script>
+}

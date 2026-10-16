@@ -1,0 +1,42 @@
+@model Maqar.Admin.ViewModels.PropertyImageStripViewModel
+@* Existing images on Edit. Re-rendered by Property/Images after every AJAX cover / move / remove. *@
+
+@if (Model.Images.Count == 0)
+{
+    <p class="text-muted mb-3">No images yet.</p>
+}
+else
+{
+    <div class="row row-cols-2 row-cols-md-4 row-cols-xl-6 g-3 mb-3">
+        @for (var i = 0; i < Model.Images.Count; i++)
+        {
+            var image = Model.Images[i];
+            <div class="col">
+                <div class="card property-image-card h-100 mb-0 @(image.IsCover ? "is-cover" : "")">
+                    <img src="@image.ImageUrl" class="card-img-top" alt="" />
+                    @if (image.IsCover)
+                    {
+                        <span class="badge bg-success property-cover-badge"><i class="bx bxs-star me-1"></i>Cover</span>
+                    }
+                    <div class="card-body p-2 d-flex justify-content-between gap-1">
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-soft-secondary js-image-action" data-action="MoveImage" data-direction="Up"
+                                    data-image-id="@image.Id" title="Move left" disabled="@(i == 0)"><i class="bx bx-chevron-left"></i></button>
+                            <button type="button" class="btn btn-soft-secondary js-image-action" data-action="MoveImage" data-direction="Down"
+                                    data-image-id="@image.Id" title="Move right" disabled="@(i == Model.Images.Count - 1)"><i class="bx bx-chevron-right"></i></button>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            @if (!image.IsCover)
+                            {
+                                <button type="button" class="btn btn-soft-warning js-image-action" data-action="SetCover"
+                                        data-image-id="@image.Id" title="Set as cover"><i class="bx bx-star"></i></button>
+                            }
+                            <button type="button" class="btn btn-soft-danger js-image-action" data-action="RemoveImage"
+                                    data-image-id="@image.Id" data-confirm="true" title="Remove"><i class="bx bx-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

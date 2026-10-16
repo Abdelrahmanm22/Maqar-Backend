@@ -1,0 +1,104 @@
+@using Maqar.Admin.Helpers
+@using Maqar.Domain.Enums
+@model Maqar.Domain.Models.ContactMessage
+@{
+    ViewData["Title"] = "Message from " + Model.Name;
+    var badge = PropertyBadges.ForMessage(Model.Status);
+}
+
+@Html.AntiForgeryToken()
+
+<div class="row justify-content-center">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+                    <div>
+                        <h4 class="card-title mb-1">@Model.Name</h4>
+                        <div class="text-muted font-size-13">
+                            <i class="bx bx-calendar me-1"></i>@Model.CreatedAt.ToLocalTime().ToString("dddd, dd MMM yyyy 'at' HH:mm")
+                        </div>
+                    </div>
+                    <span class="badge @badge.CssClass font-size-12"><i class="bx @badge.Icon me-1"></i>@badge.Label</span>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <a href="mailto:@Model.Email" class="btn btn-soft-primary btn-sm"><i class="bx bx-envelope me-1"></i> @Model.Email</a>
+                    <a href="tel:@Model.Phone" class="btn btn-soft-success btn-sm"><i class="bx bx-phone me-1"></i> @Model.Phone</a>
+                </div>
+
+                <p class="font-size-15 mb-4" style="white-space:pre-line">@Model.Message</p>
+
+                @if (Model.Property is not null)
+                {
+                    <div class="border rounded p-3 mb-4">
+                        <div class="text-muted font-size-12 mb-1">Inquiry about</div>
+                        <a asp-controller="Property" asp-action="Details" asp-route-id="@Model.Property.Id" class="fw-semibold">
+                            <i class="bx bx-building-house me-1"></i>@Model.Property.TitleEn
+                        </a>
+                        <span class="text-muted">· #@Model.Property.Id</span>
+                    </div>
+                }
+
+                <div class="d-flex flex-wrap justify-content-between gap-2">
+                    <a asp-action="Index" class="btn btn-light"><i class="bx bx-chevron-left me-1"></i> Back to inbox</a>
+                    <div class="d-flex flex-wrap gap-2">
+                        <permission required="@Permissions.ContactMessages.ChangeStatus">
+                            @foreach (var s in Enum.GetValues<ContactMessageStatus>().Where(s => s != Model.Status))
+                            {
+                                var b = PropertyBadges.ForMessage(s);
+                                <button type="button" class="btn btn-soft-secondary js-status" data-status="@s">
+                                    <i class="bx @b.Icon me-1"></i> Mark @b.Label.ToLowerInvariant()
+                                </button>
+                            }
+                        </permission>
+                        <permission required="@Permissions.ContactMessages.Delete">
+                            <button type="button" class="btn btn-soft-danger js-delete"><i class="bx bx-trash me-1"></i> Delete</button>
+                        </permission>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            var id = @Model.Id;
+            var token = $('input[name="__RequestVerificationToken"]').val();
+
+            function post(url, data, redirectTo) {
+                data.__RequestVerificationToken = token;
+                $.post(url, data)
+                    .done(function (res) {
+                        if (res.success) {
+                            toastr.success(res.message);
+                            setTimeout(function () { redirectTo ? (location.href = redirectTo) : location.reload(); }, 700);
+                        } else {
+                            toastr.error(res.message);
+                        }
+                    })
+                    .fail(function () { toastr.error('Something went wrong. Please try again.'); });
+            }
+
+            $('.js-status').on('click', function () {
+                post('@Url.Action("ChangeStatus")', { id: id, status: $(this).data('status') });
+            });
+
+            $('.js-delete').on('click', function () {
+                Swal.fire({
+                    title: 'Delete message?',
+                    text: 'This can\'t be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#f46a6a',
+                    cancelButtonColor: '#74788d',
+                    confirmButtonText: 'Yes, delete it'
+                }).then(function (result) {
+                    if (result.isConfirmed) post('@Url.Action("Delete")', { id: id }, '@Url.Action("Index")');
+                });
+            });
+        });
+    </script>
+}

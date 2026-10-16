@@ -16,8 +16,45 @@
                     </a>
                 </li>
 
-                @* Property-hub modules (Properties, Areas, Features, Contact Messages) go here as they are
-                   built — one <permission> wrapper per item, plus a mode="any" wrapper for the heading. *@
+                <permission required="@Permissions.Properties.View,@Permissions.ContactMessages.View" mode="any">
+                    <li class="menu-title">Listings</li>
+                </permission>
+                <permission required="@Permissions.Properties.View">
+                    <li>
+                        <a asp-controller="Property" asp-action="Index" class="waves-effect">
+                            <i class="bx bx-building-house"></i>
+                            <span>Properties</span>
+                        </a>
+                    </li>
+                </permission>
+                <permission required="@Permissions.ContactMessages.View">
+                    <li>
+                        <a asp-controller="ContactMessage" asp-action="Index" class="waves-effect">
+                            <i class="bx bx-envelope"></i>
+                            <span>Contact Messages</span>
+                        </a>
+                    </li>
+                </permission>
+
+                <permission required="@Permissions.Areas.View,@Permissions.Features.View" mode="any">
+                    <li class="menu-title">Catalog</li>
+                </permission>
+                <permission required="@Permissions.Areas.View">
+                    <li>
+                        <a asp-controller="Area" asp-action="Index" class="waves-effect">
+                            <i class="bx bx-map-pin"></i>
+                            <span>Areas</span>
+                        </a>
+                    </li>
+                </permission>
+                <permission required="@Permissions.Features.View">
+                    <li>
+                        <a asp-controller="Feature" asp-action="Index" class="waves-effect">
+                            <i class="bx bx-list-check"></i>
+                            <span>Features</span>
+                        </a>
+                    </li>
+                </permission>
 
                 <permission required="@Permissions.Users.View,@Permissions.Roles.View" mode="any">
                     <li class="menu-title">Administration</li>

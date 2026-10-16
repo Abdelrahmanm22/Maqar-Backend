@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,6 +16,10 @@ namespace Maqar.Repository
         public static IQueryable<T> GetQuery(IQueryable<T> inputQuery, ISpecifications<T> spec)
         {
             var query = inputQuery; //_dbContext.Set<T>()
+            if (spec.IgnoreQueryFilters)
+            {
+                query = query.IgnoreQueryFilters(); // include soft-deleted rows
+            }
             if (spec.Criteria is not null)
             {
                 query = query.Where(spec.Criteria); // _dbContext.Set<T>().Where(P => P.Id == id)
@@ -34,6 +38,10 @@ namespace Maqar.Repository
             }
             query = spec.Includes.Aggregate(query, (CurrentQuery, IncludeExpression) => CurrentQuery.Include(IncludeExpression)); ///_dbContext.Products.Where(P => P.Id == id).Include(P => P.ProductType).Include(P => P.ProductBrand);
             query = spec.IncludeStrings.Aggregate(query, (CurrentQuery, IncludeString) => CurrentQuery.Include(IncludeString)); ///// String-based includes (handles ThenInclude chains)
+            if (spec.AsSplitQuery)
+            {
+                query = query.AsSplitQuery(); // one query per collection Include — avoids the cartesian explosion
+            }
             return query;
         }
     }

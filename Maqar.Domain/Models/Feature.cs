@@ -1,7 +1,7 @@
 namespace Maqar.Domain.Models
 {
     /// <summary>An amenity a listing can offer (elevator, pool, …).</summary>
-    public class Feature : BaseModel
+    public class Feature : BaseModel, ILookupEntity
     {
         /// <summary>Stable key the frontend translates, e.g. "elevator".</summary>
         public string Key { get; set; } = string.Empty;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -29,5 +29,9 @@ namespace Maqar.Domain.Specifications
         public int Skip { get; set; }
         // Signature of property for IsPagingEnabled
         public bool IsPaginationEnabled { get; set; }
+        // Bypass global query filters (soft delete) — e.g. counting every listing that references an Area
+        public bool IgnoreQueryFilters { get; set; }
+        // Load several collection Includes in separate queries instead of one cartesian JOIN
+        public bool AsSplitQuery { get; set; }
     }
 }

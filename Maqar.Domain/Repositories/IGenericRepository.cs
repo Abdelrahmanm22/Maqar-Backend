@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,6 +12,7 @@ namespace Maqar.Domain.Repositories
     {
         Task<IEnumerable<T>> GetAllAsync(ISpecifications<T> Spec);
         Task<T> GetByIdAsync(ISpecifications<T> Spec);
+        Task<int> CountAsync(ISpecifications<T> Spec);
         Task AddAsync(T entity);
         void Update(T entity);
         void Delete(T entity);

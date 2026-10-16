@@ -239,3 +239,89 @@
 .min-width-0 {
     min-width: 0;
 }
+
+
+/* -----------------------------------------------------------------------------
+   4. Properties
+   Theme-agnostic like everything here: var(--bs-*) hues and rgba() neutrals only,
+   because app.js implements dark mode by swapping the whole stylesheet.
+   -------------------------------------------------------------------------- */
+
+/* List thumbnail (Property/Index). */
+.property-thumb {
+    width: 56px;
+    height: 42px;
+    object-fit: cover;
+}
+
+.property-thumb-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(134, 142, 150, .12);
+    color: rgba(134, 142, 150, .8);
+    font-size: 1.1rem;
+}
+
+/* Details gallery. */
+.property-hero {
+    max-height: 420px;
+    object-fit: cover;
+}
+
+.property-gallery-thumb {
+    height: 72px;
+    object-fit: cover;
+}
+
+/* Edit — existing images strip. */
+.property-image-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(134, 142, 150, .25);
+}
+
+.property-image-card.is-cover {
+    border-color: var(--bs-success);
+}
+
+.property-image-card .card-img-top {
+    height: 110px;
+    object-fit: cover;
+}
+
+.property-cover-badge {
+    position: absolute;
+    top: .5rem;
+    left: .5rem;
+}
+
+/* Dropzone ships a hardcoded white background / black border that doesn't survive the dark theme. */
+.property-dropzone {
+    min-height: 140px;
+    border: 2px dashed rgba(134, 142, 150, .4);
+    border-radius: .25rem;
+    background: transparent;
+}
+
+.property-dropzone.dz-drag-hover {
+    border-color: var(--bs-primary);
+}
+
+.property-dropzone.dz-disabled {
+    opacity: .6;
+    pointer-events: none;
+}
+
+.property-dropzone .dz-preview .dz-details {
+    color: inherit;
+}
+
+/* Feature checkboxes rendered as toggle chips (a real <input class="btn-check"> underneath). */
+.feature-chip .text-muted {
+    font-size: .75rem;
+}
+
+.btn-check:checked + .feature-chip .text-muted {
+    color: rgba(255, 255, 255, .8) !important;
+}

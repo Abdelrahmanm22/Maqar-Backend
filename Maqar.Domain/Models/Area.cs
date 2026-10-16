@@ -1,6 +1,6 @@
 namespace Maqar.Domain.Models
 {
-    public class Area : BaseModel
+    public class Area : BaseModel, ILookupEntity
     {
         /// <summary>Stable key the frontend translates and filters by, e.g. "fifthSettlement".</summary>
         public string Key { get; set; } = string.Empty;

@@ -56,6 +56,8 @@ namespace Maqar.Domain.Authorization
                     "Publish, unpublish, or mark a listing sold, rented or archived. Only published listings appear on the public site."),
                 new PermissionDescriptor(Permissions.Properties.Feature, "Feature properties",
                     "Choose which listings appear in the featured section of the home page."),
+                new PermissionDescriptor(Permissions.Properties.ViewAll, "Access all properties",
+                    "See and manage every broker's listings and all contact messages. Without it, users only see the listings they created."),
             }),
             new("Areas", "Areas", 4, new[]
             {

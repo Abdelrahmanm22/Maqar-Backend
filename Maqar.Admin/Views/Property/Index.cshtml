@@ -1,0 +1,235 @@
+@using Maqar.Admin.Helpers
+@using Maqar.Domain.Enums
+@model Maqar.Admin.ViewModels.PropertyListViewModel
+@{
+    ViewData["Title"] = "Properties";
+    var f = Model.Filters;
+}
+
+@Html.AntiForgeryToken()
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+                    <div>
+                        <h4 class="card-title mb-1">Properties</h4>
+                        <p class="text-muted mb-0">
+                            @(Model.CanViewAll ? "Every listing on Maqar." : "The listings you have added.")
+                        </p>
+                    </div>
+                    <permission required="@Permissions.Properties.Create">
+                        <a asp-action="Create" class="btn btn-primary waves-effect waves-light">
+                            <i class="bx bx-plus me-1"></i> New Property
+                        </a>
+                    </permission>
+                </div>
+
+                @* GET form — filters live in the query string so the pager and the browser's back button keep them. *@
+                <form method="get" asp-action="Index" class="row g-2 align-items-end mb-3">
+                    <div class="col-xl-3 col-md-6">
+                        <label class="form-label font-size-12 text-muted mb-1" for="Search">Search</label>
+                        <div class="position-relative">
+                            <input type="text" class="form-control ps-5" id="Search" name="Search" value="@f.Search" placeholder="Title or location, Arabic or English" />
+                            <i class="bx bx-search-alt position-absolute top-50 translate-middle-y ms-3 text-muted"></i>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-3 col-6">
+                        <label class="form-label font-size-12 text-muted mb-1" for="Status">Status</label>
+                        <select class="form-select" id="Status" name="Status">
+                            <option value="">All</option>
+                            @foreach (var s in Enum.GetValues<PropertyStatus>())
+                            {
+                                <option value="@s" selected="@(f.Status == s)">@PropertyBadges.ForStatus(s).Label</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-xl-2 col-md-3 col-6">
+                        <label class="form-label font-size-12 text-muted mb-1" for="Type">Type</label>
+                        <select class="form-select" id="Type" name="Type">
+                            <option value="">All</option>
+                            @foreach (var t in Enum.GetValues<PropertyType>())
+                            {
+                                <option value="@t" selected="@(f.Type == t)">@PropertyBadges.TypeLabel(t)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-xl-1 col-md-3 col-6">
+                        <label class="form-label font-size-12 text-muted mb-1" for="ListingType">Listing</label>
+                        <select class="form-select" id="ListingType" name="ListingType">
+                            <option value="">All</option>
+                            @foreach (var l in Enum.GetValues<ListingType>())
+                            {
+                                <option value="@l" selected="@(f.ListingType == l)">@(l == ListingType.Rent ? "Rent" : "Sale")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-xl-2 col-md-3 col-6">
+                        <label class="form-label font-size-12 text-muted mb-1" for="AreaId">Area</label>
+                        <select class="form-select" id="AreaId" name="AreaId">
+                            <option value="">All</option>
+                            @foreach (var a in Model.Areas)
+                            {
+                                <option value="@a.Value" selected="@(f.AreaId?.ToString() == a.Value)">@a.Text</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-xl-2 col-md-3 col-6">
+                        <label class="form-label font-size-12 text-muted mb-1" for="Sort">Sort</label>
+                        <select class="form-select" id="Sort" name="Sort">
+                            <option value="newest" selected="@(f.Sort is null or "newest")">Newest first</option>
+                            <option value="oldest" selected="@(f.Sort == "oldest")">Oldest first</option>
+                            <option value="priceAsc" selected="@(f.Sort == "priceAsc")">Price: low to high</option>
+                            <option value="priceDesc" selected="@(f.Sort == "priceDesc")">Price: high to low</option>
+                        </select>
+                    </div>
+                    <div class="col-xl-2 col-md-3 col-6">
+                        <label class="form-label font-size-12 text-muted mb-1" for="IsFeatured">Featured</label>
+                        <select class="form-select" id="IsFeatured" name="IsFeatured">
+                            <option value="">All</option>
+                            <option value="true" selected="@(f.IsFeatured == true)">Featured only</option>
+                            <option value="false" selected="@(f.IsFeatured == false)">Not featured</option>
+                        </select>
+                    </div>
+                    @if (Model.CanViewAll)
+                    {
+                        <div class="col-xl-3 col-md-6">
+                            <label class="form-label font-size-12 text-muted mb-1" for="CreatedById">Added by</label>
+                            <select class="form-select" id="CreatedById" name="CreatedById">
+                                <option value="">Anyone</option>
+                                @foreach (var b in Model.Brokers)
+                                {
+                                    <option value="@b.Value" selected="@(f.CreatedById == b.Value)">@b.Text</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="col-auto d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bx bx-filter-alt me-1"></i> Apply</button>
+                        @if (f.HasFilters || f.Sort is not null)
+                        {
+                            <a asp-action="Index" class="btn btn-light"><i class="bx bx-reset me-1"></i> Reset</a>
+                        }
+                    </div>
+                </form>
+
+                @if (Model.Page.Count == 0)
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="bx bx-building-house font-size-24 d-block mb-2"></i>
+                        @(f.HasFilters ? "No listings match these filters." : "No listings yet.")
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table id="properties-table" class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:72px"></th>
+                                    <th>Property</th>
+                                    <th>Area</th>
+                                    <th class="text-end">Price</th>
+                                    <th>Status</th>
+                                    @if (Model.CanViewAll)
+                                    {
+                                        <th>Added by</th>
+                                    }
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in Model.Page.Data)
+                                {
+                                    var cover = p.Images.FirstOrDefault(i => i.IsCover) ?? p.Images.OrderBy(i => i.DisplayOrder).FirstOrDefault();
+                                    var status = PropertyBadges.ForStatus(p.Status);
+                                    <tr>
+                                        <td>
+                                            @if (cover is not null)
+                                            {
+                                                <img src="@cover.ImageUrl" alt="" class="rounded property-thumb" />
+                                            }
+                                            else
+                                            {
+                                                <div class="rounded property-thumb property-thumb-empty"><i class="bx bx-image"></i></div>
+                                            }
+                                        </td>
+                                        <td class="min-width-0">
+                                            <a asp-action="Details" asp-route-id="@p.Id" class="fw-semibold text-body d-block text-truncate" style="max-width:340px">
+                                                @if (p.IsFeatured)
+                                                {
+                                                    <i class="bx bxs-star text-warning me-1" title="Featured"></i>
+                                                }
+                                                @p.TitleEn
+                                            </a>
+                                            <div class="text-muted font-size-12">
+                                                <i class="bx @PropertyBadges.TypeIcon(p.Type) me-1"></i>@PropertyBadges.TypeLabel(p.Type)
+                                                · <span class="badge @PropertyBadges.ListingCss(p.ListingType)">@PropertyBadges.ListingLabel(p.ListingType)</span>
+                                                · #@p.Id
+                                            </div>
+                                        </td>
+                                        <td>@p.Area.NameEn</td>
+                                        <td class="text-end text-nowrap">@PropertyBadges.Price(p.Price, p.ListingType)</td>
+                                        <td><span class="badge @status.CssClass"><i class="bx @status.Icon me-1"></i>@status.Label</span></td>
+                                        @if (Model.CanViewAll)
+                                        {
+                                            <td class="text-nowrap">@(p.CreatedBy?.FullName ?? "—")</td>
+                                        }
+                                        <td class="text-end text-nowrap">
+                                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-soft-info" title="Details"><i class="bx bx-show"></i></a>
+                                            <permission required="@Permissions.Properties.Edit">
+                                                <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-soft-primary" title="Edit"><i class="bx bx-pencil"></i></a>
+                                            </permission>
+                                            <permission required="@Permissions.Properties.Delete">
+                                                <button type="button" class="btn btn-sm btn-soft-danger js-delete" data-id="@p.Id" data-name="@p.TitleEn" title="Delete"><i class="bx bx-trash"></i></button>
+                                            </permission>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <partial name="_Pager" model="PagerViewModel.From(Model.Page)" />
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            var token = $('input[name="__RequestVerificationToken"]').val();
+
+            $('#properties-table').on('click', '.js-delete', function () {
+                var id = $(this).data('id');
+                var name = $(this).data('name');
+
+                Swal.fire({
+                    title: 'Delete property?',
+                    text: '“' + name + '” will be removed from the dashboard and the public site.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#f46a6a',
+                    cancelButtonColor: '#74788d',
+                    confirmButtonText: 'Yes, delete it'
+                }).then(function (result) {
+                    if (!result.isConfirmed) return;
+
+                    $.post('@Url.Action("Delete")', { id: id, __RequestVerificationToken: token })
+                        .done(function (res) {
+                            if (res.success) {
+                                toastr.success(res.message);
+                                setTimeout(function () { location.reload(); }, 800);
+                            } else {
+                                toastr.error(res.message);
+                            }
+                        })
+                        .fail(function () { toastr.error('Something went wrong. Please try again.'); });
+                });
+            });
+        });
+    </script>
+}

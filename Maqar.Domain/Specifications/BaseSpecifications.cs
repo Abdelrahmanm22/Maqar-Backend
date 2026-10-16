@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -18,6 +18,8 @@ namespace Maqar.Domain.Specifications
         public int Take { get; set; }
         public int Skip { get; set; }
         public bool IsPaginationEnabled { get; set; }
+        public bool IgnoreQueryFilters { get; set; }
+        public bool AsSplitQuery { get; set; }
 
         //Get All
         public BaseSpecifications()

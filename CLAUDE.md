@@ -36,33 +36,41 @@ Maqar.Domain       (Core — zero project references)
     ├── Models/            (BaseModel, IAuditableEntity, ISoftDeletable; Property, PropertyImage,
     │                       Area, Feature, ContactMessage; Models/Identity/AppUser)
     ├── Repositories/      (IGenericRepository<T>)
-    ├── Services/          (interfaces + DTOs only — OperationResult, ICurrentUserService,
-    │                       IFileStorageService, Identity/IRoleService, Identity/IUserAccountService)
-    ├── Specifications/    (ISpecifications<T>, BaseSpecifications<T>)
+    ├── Services/          (interfaces + DTOs only — OperationResult, PagedResult<T>, FileUpload,
+    │                       OwnerScope, ICurrentUserService, IFileStorageService,
+    │                       Identity/, Properties/ (IPropertyService, PropertyInput, PropertyImageRules),
+    │                       ContactMessages/ (IContactMessageService), Lookups/ (ILookupService<T>))
+    ├── Specifications/    (ISpecifications<T>, BaseSpecifications<T>; per-entity folders
+    │                       Properties/, ContactMessages/, Features/, Lookups/ (generic LookupOrderedSpec<T>…))
     └── IUnitOfWork.cs
 
 Maqar.Repository   (Infrastructure — references Maqar.Domain)
     ├── Data/MaqarContext.cs               (IdentityDbContext<AppUser>; audit stamping + soft delete in SaveChanges)
     ├── Data/Configrations/                (Fluent API per entity — "Configrations" typo kept from Travel; don't rename)
     ├── Data/AppIdentityDbContextSeed.cs   (SuperAdmin role + MaqarAdmin user)
-    ├── Data/Migrations/                   (InitialIdentity, AddPropertiesDomain)
+    ├── Data/Migrations/                   (InitialIdentity, AddPropertiesDomain, FixAppUserIsActiveDefault)
     ├── GenericRepository.cs
     ├── SpecificationEvalutor.cs           (typo intentional — keep it)
     ├── Storage/FileStorageService.cs      (IFileStorageService impl — disk-backed under wwwroot/Files)
     └── UnitOfWork.cs
 
 Maqar.Services     (Business Logic — references Maqar.Domain)
-    └── Identity/          (RoleService, UserAccountService)
+    ├── Identity/          (RoleService, UserAccountService)
+    ├── Properties/        (PropertyService — ownership-scoped listing management + images)
+    ├── ContactMessages/   (ContactMessageService — ownership-scoped inbox)
+    └── Lookups/           (LookupService<T> base; AreaService, FeatureService)
 
 Maqar.Admin        (MVC dashboard — references Maqar.Repository + Maqar.Services)
     ├── Authorization/     (PermissionRequirement, PermissionAuthorizationHandler,
     │                       PermissionPolicyProvider, AppUserClaimsPrincipalFactory)
-    ├── Controllers/       (Account, Home, Role, User)
-    ├── Helpers/           (AvatarHelper, PermissionIcons)
-    ├── Services/          (CurrentUserService — web-coupled impls)
+    ├── Controllers/       (AdminBaseController; Account, Home, Role, User, Property, Area, Feature, ContactMessage)
+    ├── Helpers/           (AvatarHelper, PermissionIcons, PropertyScope, PropertyBadges, FormFileExtensions)
+    ├── MappingProfiles/   (PropertyProfile, LookupProfile)
+    ├── Services/          (web-coupled impls — CurrentUserService, PropertyViewModelBuilder)
     ├── TagHelpers/        (PermissionTagHelper)
-    ├── ViewModels/        (Login, Role, User, Error)
-    ├── Views/             (Account, Home, Role, User, Shared layout partials)
+    ├── ViewModels/        (Login, Role, User, Error, Property, Lookup (Area/Feature), ContactMessage)
+    ├── Views/             (Account, Home, Role, User, Property, Area, Feature, ContactMessage,
+    │                       Shared layout partials + _Pager)
     ├── wwwroot/back/assets/   (Skote: css, fonts, images, libs, js)
     ├── wwwroot/css/app-extras.css   (the ONLY project CSS)
     └── Program.cs
@@ -152,21 +160,29 @@ API DTOs map enum values to the frontend's camelCase keys (`SuperLux` → `"supe
 All data access for `BaseModel` entities goes through `IGenericRepository<T>` + `ISpecifications<T>`:
 
 ```csharp
-var spec = new PropertyWithDetailsSpec(id);
-var one  = await _unitOfWork.Repository<Property>().GetByIdAsync(spec);
-var many = await _unitOfWork.Repository<Property>().GetAllAsync(new PropertyFilterSpec(filters));
+var one   = await _unitOfWork.Repository<Property>().GetByIdAsync(new PropertyWithDetailsSpec(id, ownerScope));
+var page  = await _unitOfWork.Repository<Property>().GetAllAsync(new PropertyWithFiltersSpec(specParams, ownerScope));
+var total = await _unitOfWork.Repository<Property>().CountAsync(new PropertyCountSpec(specParams, ownerScope));
 ```
 
-- **`IGenericRepository<T>`** has `GetAllAsync(spec)`, `GetByIdAsync(spec)` (FirstOrDefault over the spec), `AddAsync`, `Update` and `Delete`.
+- **`IGenericRepository<T>`** has `GetAllAsync(spec)`, `GetByIdAsync(spec)` (FirstOrDefault over the spec), **`CountAsync(spec)`**, `AddAsync`, `Update` and `Delete`.
 - **`ISpecifications<T>`** carries:
   - `Criteria` (WHERE)
   - `Includes` (expressions)
   - `IncludeStrings` (ThenInclude chains, e.g. `"Images"`)
   - `OrderBy` / `OrderByDesc`
   - `Skip` / `Take` / `IsPaginationEnabled`
+  - **`IgnoreQueryFilters`**: includes soft-deleted rows. `PropertiesInAreaSpec` uses it because deleted listings still hold the Restrict FK.
+  - **`AsSplitQuery`**: one SQL query per collection Include. Set it when a spec includes two or more collections, as `PropertyWithDetailsSpec` does with Images + Features; otherwise EF builds a cartesian JOIN and logs a warning.
 - **`BaseSpecifications<T>`** has two constructors: parameterless (get all) and criteria. Helpers are `AddInclude(string)`, `SetOrderBy`, `SetOrderByDesc` and `ApplyPagination(skip, take)`.
 - Name spec classes with the **`Spec`** suffix and put them in per-entity folders under `Maqar.Domain/Specifications/`.
-- **`SpecificationEvalutor`** applies them in this order: Criteria → OrderBy → OrderByDesc → Skip/Take → Includes → IncludeStrings.
+- **`SpecificationEvalutor`** applies them in this order: IgnoreQueryFilters → Criteria → OrderBy → OrderByDesc → Skip/Take → Includes → IncludeStrings → AsSplitQuery.
+- **Paged lists** need three types:
+  - **`{Entity}SpecParams`** (e.g. `PropertySpecParams`): bound straight from the query string. It clamps `PageIndex` ≥ 1 and `PageSize` ≤ 50 and trims `Search`.
+  - **`{Entity}Criteria.Build(params, ownerScope)`**: the one static WHERE expression.
+  - **`{Entity}WithFiltersSpec`** (criteria + includes + sort + `ApplyPagination`) and **`{Entity}CountSpec`** (criteria only). Both use the same `Build`, so the page and the pager total can never disagree.
+  - The service returns **`PagedResult<T>`** (`PageIndex`, `PageSize`, `Count`, `Data`, `TotalPages`), and the view renders `<partial name="_Pager" model="PagerViewModel.From(Model.Page)" />`, which keeps every query-string filter.
+- The evaluator has no `ThenBy`, so a spec sorts by one key. Pick a sensible single key (e.g. `DisplayOrder`).
 
 ### Unit of Work + Transactions
 
@@ -200,6 +216,44 @@ Services return **`OperationResult` / `OperationResult<T>`** (`Maqar.Domain/Serv
 | `ICurrentUserService` | `CurrentUserService` (Maqar.Admin/Services) | Current user id + username |
 | `IRoleService` | `RoleService` (Maqar.Services/Identity) | Role CRUD + atomic role-claim replacement |
 | `IUserAccountService` | `UserAccountService` (Maqar.Services/Identity) | User CRUD, roles, direct permissions, lockout guards |
+| `IPropertyService` | `PropertyService` (Maqar.Services/Properties) | Paged list, details, create/update (input + features + images), soft delete, status, featured, cover/move/remove image. **Every member takes `ownerScope`** |
+| `IContactMessageService` | `ContactMessageService` (Maqar.Services/ContactMessages) | Paged inbox, new-count, details (marks New → Read), status, delete. **Scoped** |
+| `ILookupService<Area>` / `ILookupService<Feature>` | `AreaService` / `FeatureService` : `LookupService<T>` (Maqar.Services/Lookups) | Ordered list, get, key uniqueness, next display order, usage count, create/update (rejects a taken key), delete |
+| `IPropertyViewModelBuilder` | `PropertyViewModelBuilder` (Maqar.Admin/Services) | Builds the Property list / details / form / image-strip view models (lookups, dropdowns, inquiries). In the web project because view models are web types |
+
+**Lookups share one generic service.**
+- `Area` and `Feature` implement **`ILookupEntity`** (`Id`, `Key`, `DisplayOrder`, `IsActive`).
+- **`LookupService<T>`** holds the shared CRUD, querying through the generic **`LookupOrderedSpec<T>` / `LookupByIdSpec<T>` / `LookupByKeySpec<T>`**. EF translates the interface-typed member access fine.
+- **Subclasses** supply only what differs:
+  - `EntityName`, for messages.
+  - `CountUsageAsync`: Area counts soft-deleted listings too (Restrict FK); Feature counts live ones.
+  - `ValidateDeleteAsync`: Area blocks the delete while it's in use; Feature always allows it and the delete cascades off listings.
+- **To add a new lookup:**
+  1. Implement `ILookupEntity` on the entity.
+  2. Subclass `LookupService<T>`.
+  3. Register it as `ILookupService<T>`.
+  4. Copy a lookup controller.
+
+**`PropertyService` rules** (the server is the source of truth; the JS only mirrors them):
+- **RentalUnit:** cleared on a sale. That matches the DB check constraint.
+- **Land:** Bedrooms, Bathrooms and Finishing are cleared.
+- **Area:** an inactive area can't be chosen for a new listing, but a listing already in one keeps it.
+- **Features:** selected features must exist.
+- **Cover image:** exactly one whenever images exist (`EnsureSingleCover`).
+- **Images** follow `PropertyImageRules`:
+  - JPG, PNG or WebP, at most 5MB each and 15 per listing.
+  - Stored as `/Files/Properties/{guid}{ext}`. Only the extension of the uploaded name is kept, so no spaces or Arabic end up in URLs.
+- **Status changes:**
+  - Publishing needs at least one image.
+  - Sold applies only to a sale, Rented only to a rental.
+  - The last image of a published listing can't be removed.
+- **Delete is soft.** The rows and image files are kept so the listing can be restored.
+- **File consistency:**
+  - Files are written before `CompleteAsync` and deleted again if the save throws.
+  - A removed image's file is deleted only *after* the commit.
+- **Update** works on the entity tracked by `GetAsync` and does **not** call `Repository.Update()`, which would mark every loaded Feature as Modified.
+
+**`IFormFile` never reaches a service.** Controllers convert uploads to **`FileUpload(Stream, FileName, Length)`** and dispose the streams in a `finally`.
 
 Only `Maqar.Admin` registers these today. `Maqar.Api` registers just the DbContext, `IUnitOfWork` and the generic repository; add services there as endpoints need them. Note that the Identity services need `AddIdentityCore<AppUser>()` in the Api first.
 
@@ -242,7 +296,7 @@ Server=.;Database=MaqarDB;Trusted_Connection=True;MultipleActiveResultSets=true;
 **Guardrails:**
 - **SQL Server cascade cycles (error 1785):** use `Cascade` only for ownership FKs (e.g. Property → PropertyImages) and `NoAction` for reference FKs (e.g. Property → Area).
 - **Nullable columns in a unique index need `.HasFilter("[Col] IS NOT NULL")`.** SQL Server treats NULLs as equal.
-- **Don't put DB defaults (`HasDefaultValue`) on enum or bool properties.** EF treats the CLR default (`0` / `false`) as "not set" and sends nothing, so the DB default wins: an explicit `IsActive = false` would be saved as `true`. Initialise defaults in C# instead. (`AppUserConfig` still has `IsActive` with `HasDefaultValue(true)`, inherited from Travel; see Gotchas.)
+- **Don't put DB defaults (`HasDefaultValue`) on enum or bool properties.** EF treats the CLR default (`0` / `false`) as "not set" and sends nothing, so the DB default wins: an explicit `IsActive = false` would be saved as `true`. Initialise defaults in C# instead. (`AppUserConfig.IsActive` had exactly this bug. It was fixed by migration `FixAppUserIsActiveDefault`.)
 - **`sqlcmd` deletes on Identity tables need `-I`** (QUOTED_IDENTIFIER ON) because of the filtered unique indexes.
 
 ---
@@ -313,6 +367,43 @@ Every error has the same JSON shape, `{ statusCode, message }`, plus `errors` or
 
 ---
 
+## Ownership Scoping (brokers see only their own listings)
+
+Most dashboard users are **brokers**. Without **`Properties.ViewAll`**, a user can see and act on **only the listings they created** (`Property.CreatedById`) and **only inquiries about those listings**. General contact-form messages also need ViewAll. The other Properties permissions (View/Edit/Delete/Publish/Feature) still decide *what* a user may do; ViewAll only decides *on which listings*.
+
+**The convention: `string? ownerScope`.** It is documented on `Maqar.Domain/Services/OwnerScope.cs`.
+- **Values:**
+  - `null` means unrestricted (the user holds ViewAll; SuperAdmin passes through the handler).
+  - Otherwise it is the current user's id.
+- **Where it's resolved:** once per action, through **`IAuthorizationService.GetPropertyOwnerScopeAsync(User)`** (`Maqar.Admin/Helpers/PropertyScope.cs`). It goes through `IAuthorizationService`, never `User.HasClaim`, because SuperAdmin carries no claims.
+- **Where it's enforced:** in the **specifications**, as part of the WHERE clause:
+  - `PropertyCriteria.Build`, `PropertyWithDetailsSpec` and `PropertyImagesInScopeSpec`
+  - `ContactMessageCriteria.Build` / `.ById`.
+  - This is not a check in the UI or the controller, so there is no code path that loads a listing first and then forgets to check its owner.
+- **Out of scope looks the same as missing.** It returns **404** in MVC actions and `{ success: false, message: "Property not found." }` from JSON actions, never 403, so a broker can't probe which ids exist.
+- **"Added by" filter:** `PropertySpecParams.CreatedById` is only honoured when the scope is null. A scoped user is always pinned to themselves.
+- **Views:** `CanViewAll` on the list view models shows the "Added by" column and filter.
+
+**Adding a new property-related screen:**
+1. Resolve `ownerScope` in the action.
+2. Pass it to the service or spec.
+3. Put the condition in the spec's criteria.
+4. Never filter in the controller.
+
+**Verified 2026-10-16** with two brokers in a role holding all Properties permissions except ViewAll, plus ContactMessages.View:
+
+| Check | Result |
+|---|---|
+| A's listing in B's index | Not shown |
+| B → `/Property/Details`, `/Edit`, `/Images` of A's listing | 404 |
+| B → `Delete` / `ChangeStatus` POSTs on A's listing | "Property not found", and the row is untouched |
+| B → `ToggleFeatured` (B lacks Feature) | Redirected to AccessDenied |
+| A's inbox | Only the inquiry on A's listing, not the general message |
+| A opens the general message | 404 |
+| B after the role gained ViewAll | Sees A's listing and the "Added by" filter |
+
+---
+
 ## Authorization System (RBAC — ported from Travel)
 
 Claims-based permissions on top of ASP.NET Identity. **There is no Permission table and no migration.** The catalog is C# constants, and assignments are rows in `AspNetRoleClaims` / `AspNetUserClaims` with `ClaimType = "permission"`.
@@ -327,18 +418,18 @@ Claims-based permissions on top of ASP.NET Identity. **There is no Permission ta
 | `PermissionClaims.cs` | `Pack` / `Unpack`. The cookie carries **one** comma-joined permission claim; the DB keeps one row each |
 | `AppRoles.cs` | `SuperAdmin` + `IsProtected(name)`. Named `AppRoles` so it doesn't clash with `Permissions.Roles` |
 
-**Current modules (30 permissions):**
+**Current modules (31 permissions):**
 
 | Module (Order) | Permissions |
 |---|---|
 | **Users** (1) | `View`, `Create`, `Edit`, `Delete`, `ToggleActive`, `ResetPassword`, `AssignRoles`, `ManagePermissions` |
 | **Roles** (2) | `View`, `Create`, `Edit`, `Delete`, `ManagePermissions` |
-| **Properties** (3) | `View`, `Create`, `Edit`, `Delete`, `Publish` (change status), `Feature` (toggle featured) |
+| **Properties** (3) | `View`, `Create`, `Edit`, `Delete`, `Publish` (change status), `Feature` (toggle featured), **`ViewAll`** (lifts the ownership scope; see Ownership Scoping) |
 | **Areas** (4) | `View`, `Create`, `Edit`, `Delete` |
 | **Features** (5) | `View`, `Create`, `Edit`, `Delete` |
 | **ContactMessages** (6) | `View`, `ChangeStatus`, `Delete` |
 
-Steps 1–3 below are already done for the four property-hub modules. They have **no screens or sidebar items yet**, so steps 4–5 come with their CRUD pages.
+All six modules have screens and sidebar items. The sidebar has three sections: **Listings** (Properties, Contact Messages), **Catalog** (Areas, Features) and **Administration**.
 
 **Adding a module:**
 1. Add a nested class of consts to `Permissions.cs`.
@@ -394,6 +485,19 @@ Each step has its own guard:
 - `ErrorViewModel`: in namespace `Maqar.Admin.Models`, kept from Travel.
 - `RoleViewModel` + `PermissionGroupViewModel` / `PermissionItemViewModel`. The item carries `IsSelected`, `IsLocked`, `LockedReason` and `IsAlsoDirect`, so `_PermissionModules.cshtml` serves both roles and users.
 - `UserFormViewModel`, `RoleOptionViewModel`, `UserPermissionsViewModel`, `ResetPasswordViewModel`.
+- **`PropertyFormViewModel`**:
+  - **Nullable fields:** `Price`, `Size` and `AreaId` are nullable so `[Required]` fires; they're mapped to the non-nullable `PropertyInput` by `PropertyProfile`.
+  - **`IValidatableObject` rules:** a rental needs a RentalUnit; latitude and longitude come together or not at all; Bedrooms and Bathrooms are required unless the type is Land.
+  - **Other fields:** `SelectedFeatureIds` and `NewImages` (`List<IFormFile>`, filled by the Dropzone).
+  - **Display-only:** `ExistingImages`, `Areas`, `Features`.
+- **List and details view models:**
+  - `PropertyListViewModel` and `ContactMessageListViewModel` hold the filters, a `PagedResult` and `CanViewAll`.
+  - `PropertyDetailsViewModel` adds the inquiries.
+  - `PropertyImageStripViewModel` is used by `_PropertyImages`, which `Property/Images` re-renders after each AJAX change.
+  - `PagerViewModel` feeds `_Pager`.
+- **`AreaViewModel` / `FeatureViewModel`** (`LookupViewModels.cs`):
+  - They share the abstract `LookupViewModel`, but **each declares `Key` itself**, with `[Required]`, the camelCase regex and its own `[Remote]`. A partial typed on the abstract base would read the *base* property's metadata and silently drop that client validation, so each entity has a concrete `_AreaForm` / `_FeatureForm`.
+  - **Server-side uniqueness:** `[Remote]` is client-only, so controllers re-check the key on save.
 
 Rules:
 - Use the **`ViewModel`** suffix, and `[Remote]` for uniqueness checks.
@@ -446,9 +550,14 @@ From `D:\My Career\maqar-properties-hub\src\data\properties.ts`. **The models ar
    - `[Authorize(Policy = ...)]` for permission gates.
    - `[Authorize]` for authenticated-only.
    - `[AllowAnonymous]` for login, access-denied and `/Home/Error`.
-7. **Admin controller responses:** Delete returns JSON for AJAX. Create/Edit are POST + redirect, with Toastr messages via `TempData`.
+7. **Admin controller responses:** Delete returns JSON for AJAX, through `ToJson(result, message)` on **`AdminBaseController`**. Create/Edit are POST + redirect, with Toastr messages via `TempData`.
 8. **API controllers:** return DTOs, never entities. Keep the keys and `Localized` shape the frontend expects.
-9. **Thin controllers:** keep them HTTP-only and push orchestration into services.
+9. **Thin controllers.** An action resolves the scope, calls one service or builder, and maps the result to a view, a redirect or JSON. Nothing else belongs there:
+   - **No business rules.** Key uniqueness, delete guards and display order belong in a service (`ILookupService<T>`, `IPropertyService`).
+   - **No view-model assembly from the database.** Loading lookups or dropdowns for a form goes in a builder (`IPropertyViewModelBuilder`).
+   - **No upload plumbing.** Use `model.NewImages.ToUploads()` (`Helpers/FormFileExtensions`), which returns a disposable `FileUploadBatch`.
+   - **What may stay as a private method:** one-line, HTTP-shaped wrappers such as `GetScopeAsync()`, which reads the request's `User`.
+   - **Shared helpers:** anything two controllers need goes in **`AdminBaseController`** (`ToJson`, `CurrentUserId`). CRUD controllers inherit from it, and it carries `[Authorize]`.
 
 ---
 
@@ -466,6 +575,20 @@ From `D:\My Career\maqar-properties-hub\src\data\properties.ts`. **The models ar
   - `Logo_Maqar_Icon.png`: the collapsed sidebar.
   - `favicon.png`.
 - **Copied Skote JS:** Skote's `app.js` and its demo `js/pages/` came over from Travel, plus the project scripts `role-permissions.js`, `user-form.js` and `notifications.js`. Travel's domain scripts (booking, package, etc.) were not copied.
+- **Property JS:**
+  - **`property-form.js`:**
+    - shows RentalUnit and the "/ month" suffix only for rentals
+    - hides Bedrooms, Bathrooms, Finishing and Floor for Land
+    - disables the submit button only after `$(form).valid()` passes.
+  - **`property-images.js`:**
+    - **Upload:** a Dropzone mirrored into the hidden `<input name="NewImages" multiple>` through `DataTransfer`, so the files post with the form (ported from Travel's `attachment-dropzones.js`).
+    - **Edit:** the cover / move / remove buttons POST over AJAX, then re-fetch `Property/Images/{id}`, so unsaved form fields survive.
+  - Dropzone loads only on Property Create/Edit, from `libs/dropzone/min/`.
+- **Picked files can't survive a failed save.** Browsers can't re-populate a file input, so the form tells the user to re-add images after a validation error.
+- **Display text:** `Helpers/PropertyBadges.cs` is the single source of truth for status, type, listing, rental-unit and finishing labels, badge CSS and icons, plus `Price(...)` ("EGP 4,750,000 / month", invariant culture).
+- **Lists:**
+  - Property and ContactMessage lists are **server-paged** (`_Pager`) with GET-form filters in the query string.
+  - Area and Feature lists are small, so they use **DataTables** client-side.
 
 ### ⚠️ Bootstrap **5.0.0-beta2**, not 5.3
 
@@ -524,7 +647,7 @@ They render detached in this template; Travel tried and abandoned them. Show the
 
 ### 2026-10-16 — v2: real-estate domain models
 - **`CascadeDeleteTiming.Immediate` (the EF default) defeats soft delete for tracked children.** `Remove()` marks loaded dependents `Deleted` immediately, so they are hard-deleted even though `SaveChanges` turns the parent into a soft delete. `MaqarContext` sets `OnSaveChanges`. Don't remove it.
-- **`HasDefaultValue(true)` on a bool is a trap.** It was removed from `Area`/`Feature.IsActive` before the migration. **`AppUserConfig.IsActive` still has it**, inherited from Travel. Creating a user with `IsActive = false` is likely saved as active; this is not verified yet. Fix it by dropping the default and adding a migration.
+- **`HasDefaultValue(true)` on a bool is a trap.** It was removed from `Area`/`Feature.IsActive` before the migration. `AppUserConfig.IsActive` had it too and was fixed in v4.
 - **The EF tools are 10.0.8 while the runtime is 9.0.21.** Migrations generate fine. Upgrade the tools only together with the packages.
 
 ### 2026-10-16 — v3: API error handling ported from Talabat.APIs
@@ -536,6 +659,26 @@ Talabat's version had five bugs. None of them was copied:
 5. **Naming:** `looger` → `_logger`, `APIBaseController` → `ApiBaseController`, and the commented-out code was dropped.
 
 When porting from Talabat again, check for the same patterns.
+
+### 2026-10-16 — v4: admin CRUD with broker ownership scoping
+- **The `AppUser.IsActive` default bug was real.** Before the fix, creating a user with "Active" unchecked saved them as active. `HasDefaultValue(true)` was dropped from `AppUserConfig` (migration `FixAppUserIsActiveDefault`). Verified: an inactive user is now stored as `IsActive = 0`.
+- **Area delete needs `IgnoreQueryFilters`.** Soft-deleted listings still reference the area through a Restrict FK, so a count that only sees live listings would allow the delete and SQL would then throw. `PropertiesInAreaSpec` sets `IgnoreQueryFilters = true`.
+- **`PropertyWithDetailsSpec` loads two collections** (Images + Features). Without `AsSplitQuery` EF logs a "multiple collection navigations" warning and builds a cartesian JOIN.
+- **Don't call `Repository.Update()` on an entity that's already tracked.** It marks the whole loaded graph (every Feature) as Modified. `PropertyService.UpdateAsync` just mutates the tracked entity and calls `CompleteAsync`.
+- **The default route action is `Login`, which bites JS URL building.** `Url.Action("Index")` gives `/Property/Index`, so AJAX bases are built with `Url.Content("~/Property/")` + the action name, never by string-appending to `Url.Action("Index")`.
+- **`bx-envelope-open` doesn't exist** in this Boxicons build. Use `bx-envelope` / `bx-show`.
+- **When counting rows in curl-based tests, remember each row prints its title twice**, once as the link and once in the delete button's `data-name`.
+
+### 2026-10-16 — v5: controllers slimmed to HTTP-only
+- **What was removed from controllers:**
+  - `ToJson` was copied in two controllers and Area/Feature `Delete` did the same by hand; it is now in `AdminBaseController`.
+  - `ValidateKeyAsync` / `NextDisplayOrderAsync` were copied verbatim in Area and Feature; they are now in `LookupService<T>`.
+  - `PropertyController`'s lookup and dropdown loading moved to `PropertyViewModelBuilder`.
+  - `ToUploads` / `DisposeAll` became `FormFileExtensions` / `FileUploadBatch`.
+  - The old `AreaOrderedSpec` / `AreaByKeySpec` / `FeatureOrderedSpec` / `FeatureByKeySpec` were replaced by the generic `Lookup*Spec<T>`.
+- **Edit POST no longer compares error strings.** `PropertyController.Edit` used to test `result.Error == OwnerScope.NotFoundMessage`. On any failure it now redisplays the form, and the reload it needs anyway (for the existing images) returns null when the listing is out of scope, which gives the 404.
+- **Don't name a controller helper `JsonResult(...)`.** It shadows MVC's `JsonResult` type; the helper is `ToJson`.
+- **Verified:** the same end-to-end script passed after the refactor, plus checks for a duplicate key on Edit, deactivating an area (it disappears from the property form), deleting an unused area, a feature's usage count, deleting a feature, and the default display order.
 
 ### Reusable guardrails (apply as the domain is built)
 - **Roles and users can't go through `IUnitOfWork.Repository<T>()`.** It requires `BaseModel`, which has an int Id, and Identity uses string Ids. Use `UserManager`/`RoleManager`. They share the scoped `MaqarContext`, so `BeginTransactionAsync` still makes multi-claim changes atomic.

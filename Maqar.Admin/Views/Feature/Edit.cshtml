@@ -1,0 +1,37 @@
+@model Maqar.Admin.ViewModels.FeatureViewModel
+@{
+    ViewData["Title"] = "Edit Feature";
+}
+
+<div class="row justify-content-center">
+    <div class="col-xl-8 col-lg-10">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">Edit Feature</h4>
+
+                <form asp-action="Edit" method="post" id="lookup-form">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input type="hidden" asp-for="Id" />
+
+                    <partial name="_FeatureForm" model="Model" />
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <a asp-action="Index" class="btn btn-light">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Live preview of the Boxicons class.
+        $('#Icon').on('input', function () {
+            var v = $(this).val().trim();
+            $('#icon-preview').attr('class', 'bx ' + (/^bxs?-[a-z0-9-]+$/.test(v) ? v : 'bx-list-check'));
+        });
+    </script>
+}

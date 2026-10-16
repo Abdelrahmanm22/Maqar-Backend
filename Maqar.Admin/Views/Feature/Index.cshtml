@@ -1,0 +1,116 @@
+@model List<Maqar.Admin.ViewModels.FeatureViewModel>
+@{
+    ViewData["Title"] = "Features";
+}
+
+<link href="~/back/assets/libs/datatables.net-bs4/css/dataTables.bootstrap4.min.css" rel="stylesheet" type="text/css" />
+
+@Html.AntiForgeryToken()
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+                    <div>
+                        <h4 class="card-title mb-1">Features</h4>
+                        <p class="text-muted mb-0">Amenities a listing can offer. Inactive features are hidden from the property form.</p>
+                    </div>
+                    <permission required="@Permissions.Features.Create">
+                        <a asp-action="Create" class="btn btn-primary waves-effect waves-light">
+                            <i class="bx bx-plus me-1"></i> New Feature
+                        </a>
+                    </permission>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="lookup-table" class="table table-hover align-middle mb-0" style="width:100%">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Key</th>
+                                <th>Listings</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model)
+                            {
+                                <tr>
+                                    <td class="text-muted">@item.DisplayOrder</td>
+                                    <td>
+                                        <div class="fw-semibold">@if (!string.IsNullOrEmpty(item.Icon)) { <i class="bx @item.Icon text-primary me-1"></i> }@item.NameEn</div>
+                                        <div class="text-muted font-size-12" dir="rtl" lang="ar">@item.NameAr</div>
+                                    </td>
+                                    <td><code>@item.Key</code></td>
+                                    <td>@item.PropertyCount</td>
+                                    <td>
+                                        @if (item.IsActive)
+                                        {
+                                            <span class="badge bg-success-subtle text-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary-subtle text-secondary">Inactive</span>
+                                        }
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        <permission required="@Permissions.Features.Edit">
+                                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-soft-primary" title="Edit"><i class="bx bx-pencil"></i></a>
+                                        </permission>
+                                        <permission required="@Permissions.Features.Delete">
+                                            <button type="button" class="btn btn-sm btn-soft-danger js-delete" data-id="@item.Id" data-name="@item.NameEn" data-count="@item.PropertyCount" title="Delete"><i class="bx bx-trash"></i></button>
+                                        </permission>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/back/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="~/back/assets/libs/datatables.net-bs4/js/dataTables.bootstrap4.min.js"></script>
+    <script>
+        $(function () {
+            $('#lookup-table').DataTable({ order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: 5 }] });
+
+            var token = $('input[name="__RequestVerificationToken"]').val();
+
+            $('#lookup-table').on('click', '.js-delete', function () {
+                var id = $(this).data('id');
+                var name = $(this).data('name');
+                var count = $(this).data('count');
+
+                Swal.fire({
+                    title: 'Delete feature?',
+                    text: '“' + name + '” will be permanently removed' + (count > 0 ? ' — and taken off the ' + count + ' listing(s) that offer it.' : '.'),
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#f46a6a',
+                    cancelButtonColor: '#74788d',
+                    confirmButtonText: 'Yes, delete it'
+                }).then(function (result) {
+                    if (!result.isConfirmed) return;
+
+                    $.post('@Url.Action("Delete")', { id: id, __RequestVerificationToken: token })
+                        .done(function (res) {
+                            if (res.success) {
+                                toastr.success(res.message);
+                                setTimeout(function () { location.reload(); }, 800);
+                            } else {
+                                toastr.error(res.message);
+                            }
+                        })
+                        .fail(function () { toastr.error('Something went wrong. Please try again.'); });
+                });
+            });
+        });
+    </script>
+}

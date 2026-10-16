@@ -9,11 +9,18 @@ using Maqar.Domain.Authorization;
 using Maqar.Domain.Models.Identity;
 using Maqar.Domain.Repositories;
 using Maqar.Domain.Services;
+using Maqar.Domain.Services.ContactMessages;
 using Maqar.Domain.Services.Identity;
+using Maqar.Domain.Services.Lookups;
+using Maqar.Domain.Models;
+using Maqar.Domain.Services.Properties;
 using Maqar.Repository;
 using Maqar.Repository.Data;
 using Maqar.Repository.Storage;
+using Maqar.Services.ContactMessages;
 using Maqar.Services.Identity;
+using Maqar.Services.Lookups;
+using Maqar.Services.Properties;
 
 namespace Maqar.Admin
 {
@@ -44,6 +51,11 @@ namespace Maqar.Admin
             builder.Services.AddAutoMapper(typeof(Program).Assembly);
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
             builder.Services.AddScoped<IFileStorageService>(_ => new FileStorageService(builder.Environment.WebRootPath));
+            builder.Services.AddScoped<IPropertyService, PropertyService>();
+            builder.Services.AddScoped<IContactMessageService, ContactMessageService>();
+            builder.Services.AddScoped<ILookupService<Area>, AreaService>();
+            builder.Services.AddScoped<ILookupService<Feature>, FeatureService>();
+            builder.Services.AddScoped<IPropertyViewModelBuilder, PropertyViewModelBuilder>();
 
             // Who is making the request — Maqar.Repository / Maqar.Services must not see IHttpContextAccessor.
             builder.Services.AddHttpContextAccessor();

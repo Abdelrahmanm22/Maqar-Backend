@@ -1,0 +1,205 @@
+@using Maqar.Admin.Helpers
+@using Maqar.Domain.Enums
+@using Maqar.Domain.Services.Properties
+@model Maqar.Admin.ViewModels.PropertyFormViewModel
+
+@* ─── Basics ───────────────────────────────────────────────────────────── *@
+<h5 class="font-size-15 mb-3"><i class="bx bx-building-house text-primary me-1"></i> Basics</h5>
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <label asp-for="Type" class="form-label"></label>
+        <select asp-for="Type" class="form-select" id="property-type">
+            @foreach (var t in Enum.GetValues<PropertyType>())
+            {
+                <option value="@t" selected="@(Model.Type == t)">@PropertyBadges.TypeLabel(t)</option>
+            }
+        </select>
+        <span asp-validation-for="Type" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 mb-3">
+        <label asp-for="ListingType" class="form-label"></label>
+        <select asp-for="ListingType" class="form-select" id="listing-type">
+            @foreach (var l in Enum.GetValues<ListingType>())
+            {
+                <option value="@l" selected="@(Model.ListingType == l)">@PropertyBadges.ListingLabel(l)</option>
+            }
+        </select>
+        <span asp-validation-for="ListingType" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 mb-3 js-rent-only">
+        <label asp-for="RentalUnit" class="form-label"></label>
+        <select asp-for="RentalUnit" class="form-select">
+            <option value="">Choose…</option>
+            @foreach (var u in Enum.GetValues<RentalUnit>())
+            {
+                <option value="@u" selected="@(Model.RentalUnit == u)">@PropertyBadges.RentalUnitLabel(u)</option>
+            }
+        </select>
+        <span asp-validation-for="RentalUnit" class="text-danger"></span>
+        <small class="text-muted d-block mt-1">For a room or a bed, the specs below describe that room.</small>
+    </div>
+</div>
+
+@* ─── Price ────────────────────────────────────────────────────────────── *@
+<h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-dollar text-primary me-1"></i> Price</h5>
+<div class="row align-items-center">
+    <div class="col-md-6 mb-3">
+        <label asp-for="Price" class="form-label"></label>
+        <div class="input-group">
+            <input asp-for="Price" class="form-control" type="number" step="1" min="1" placeholder="e.g. 4750000" />
+            <span class="input-group-text js-price-suffix">EGP</span>
+        </div>
+        <span asp-validation-for="Price" class="text-danger"></span>
+        <small class="text-muted d-block mt-1 js-rent-only">Monthly rent.</small>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="form-check form-switch form-switch-md mt-md-4">
+            <input asp-for="IsNegotiable" class="form-check-input" />
+            <label asp-for="IsNegotiable" class="form-check-label"></label>
+        </div>
+    </div>
+</div>
+
+@* ─── Specs ────────────────────────────────────────────────────────────── *@
+<h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-ruler text-primary me-1"></i> Specs</h5>
+<div class="row">
+    <div class="col-md-4 col-6 mb-3">
+        <label asp-for="Size" class="form-label"></label>
+        <input asp-for="Size" class="form-control" type="number" step="0.01" min="1" placeholder="e.g. 180" />
+        <span asp-validation-for="Size" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 col-6 mb-3 js-not-land">
+        <label asp-for="Bedrooms" class="form-label"></label>
+        <input asp-for="Bedrooms" class="form-control" type="number" min="0" max="50" />
+        <span asp-validation-for="Bedrooms" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 col-6 mb-3 js-not-land">
+        <label asp-for="Bathrooms" class="form-label"></label>
+        <input asp-for="Bathrooms" class="form-control" type="number" min="0" max="50" />
+        <span asp-validation-for="Bathrooms" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 col-6 mb-3 js-not-land">
+        <label asp-for="Finishing" class="form-label"></label>
+        <select asp-for="Finishing" class="form-select">
+            <option value="">Not specified</option>
+            @foreach (var fin in Enum.GetValues<FinishingType>())
+            {
+                <option value="@fin" selected="@(Model.Finishing == fin)">@PropertyBadges.FinishingLabel(fin)</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-4 col-6 mb-3 js-not-land">
+        <label asp-for="Floor" class="form-label"></label>
+        <input asp-for="Floor" class="form-control" type="number" min="-5" max="200" placeholder="0 = ground" />
+        <span asp-validation-for="Floor" class="text-danger"></span>
+    </div>
+</div>
+
+@* ─── Text ─────────────────────────────────────────────────────────────── *@
+<h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-list-ul text-primary me-1"></i> Listing text</h5>
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <label asp-for="TitleEn" class="form-label"></label>
+        <input asp-for="TitleEn" class="form-control" placeholder="e.g. Modern apartment with garden view" />
+        <span asp-validation-for="TitleEn" class="text-danger"></span>
+    </div>
+    <div class="col-md-6 mb-3">
+        <label asp-for="TitleAr" class="form-label"></label>
+        <input asp-for="TitleAr" class="form-control" dir="rtl" lang="ar" placeholder="مثال: شقة حديثة بإطلالة على الحديقة" />
+        <span asp-validation-for="TitleAr" class="text-danger"></span>
+    </div>
+    <div class="col-md-6 mb-3">
+        <label asp-for="DescriptionEn" class="form-label"></label>
+        <textarea asp-for="DescriptionEn" class="form-control" rows="5"></textarea>
+        <span asp-validation-for="DescriptionEn" class="text-danger"></span>
+    </div>
+    <div class="col-md-6 mb-3">
+        <label asp-for="DescriptionAr" class="form-label"></label>
+        <textarea asp-for="DescriptionAr" class="form-control" rows="5" dir="rtl" lang="ar"></textarea>
+        <span asp-validation-for="DescriptionAr" class="text-danger"></span>
+    </div>
+</div>
+
+@* ─── Location ─────────────────────────────────────────────────────────── *@
+<h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-map text-primary me-1"></i> Location</h5>
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <label asp-for="AreaId" class="form-label"></label>
+        <select asp-for="AreaId" asp-items="Model.Areas" class="form-select">
+            <option value="">Choose an area…</option>
+        </select>
+        <span asp-validation-for="AreaId" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 mb-3">
+        <label asp-for="LocationEn" class="form-label"></label>
+        <input asp-for="LocationEn" class="form-control" placeholder="Street, compound or landmark" />
+        <span asp-validation-for="LocationEn" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 mb-3">
+        <label asp-for="LocationAr" class="form-label"></label>
+        <input asp-for="LocationAr" class="form-control" dir="rtl" lang="ar" />
+        <span asp-validation-for="LocationAr" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 col-6 mb-3">
+        <label asp-for="Latitude" class="form-label"></label>
+        <input asp-for="Latitude" class="form-control" type="number" step="0.000001" placeholder="e.g. 30.007413" />
+        <span asp-validation-for="Latitude" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 col-6 mb-3">
+        <label asp-for="Longitude" class="form-label"></label>
+        <input asp-for="Longitude" class="form-control" type="number" step="0.000001" placeholder="e.g. 31.491318" />
+        <span asp-validation-for="Longitude" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 mb-3 d-flex align-items-end">
+        <small class="text-muted">Optional — shown on the listing's map. Copy them from Google Maps (right-click a spot).</small>
+    </div>
+</div>
+
+@* ─── Features ─────────────────────────────────────────────────────────── *@
+<h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-list-check text-primary me-1"></i> Features</h5>
+@if (Model.Features.Count == 0)
+{
+    <p class="text-muted">No features defined yet.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        @foreach (var feature in Model.Features)
+        {
+            var id = "feature-" + feature.Id;
+            @* name="SelectedFeatureIds", never asp-for — see PropertyFormViewModel. *@
+            <input type="checkbox" class="btn-check" name="SelectedFeatureIds" value="@feature.Id" id="@id" autocomplete="off"
+                   @(Model.SelectedFeatureIds.Contains(feature.Id) ? "checked" : "") />
+            <label class="btn btn-outline-primary btn-sm feature-chip" for="@id">
+                @if (!string.IsNullOrEmpty(feature.Icon))
+                {
+                    <i class="bx @feature.Icon me-1"></i>
+                }
+                @feature.NameEn <span class="text-muted ms-1" dir="rtl">@feature.NameAr</span>
+            </label>
+        }
+    </div>
+}
+
+@* ─── Images ───────────────────────────────────────────────────────────── *@
+<h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-images text-primary me-1"></i> Images</h5>
+@if (!Model.IsCreate)
+{
+    <div id="property-images" data-refresh-url="@Url.Action("Images", new { id = Model.Id })">
+        <partial name="_PropertyImages" model="new Maqar.Admin.ViewModels.PropertyImageStripViewModel { PropertyId = Model.Id, Images = Model.ExistingImages }" />
+    </div>
+}
+<div class="dropzone property-dropzone" id="property-dropzone"
+     data-max-files="@(PropertyImageRules.MaxImagesPerProperty - Model.ExistingImages.Count)">
+    <div class="dz-message needsclick">
+        <i class="bx bx-cloud-upload display-6 text-muted d-block mb-2"></i>
+        <h6 class="mb-1">Drop images here or click to upload</h6>
+        <small class="text-muted">JPG, PNG or WebP · up to 5MB each · @PropertyImageRules.MaxImagesPerProperty per listing@(Model.IsCreate ? " · the first image becomes the cover" : "")</small>
+    </div>
+</div>
+@* The real upload: Dropzone mirrors its files into this input, so they post with the form. *@
+<input type="file" name="NewImages" id="property-images-input" class="d-none" multiple accept=".jpg,.jpeg,.png,.webp" />
+@if (!ViewData.ModelState.IsValid)
+{
+    <small class="text-warning d-block mt-2"><i class="bx bx-error-circle me-1"></i>Browsers can't keep picked files after a failed save — add the new images again.</small>
+}

@@ -1,0 +1,43 @@
+@model Maqar.Admin.ViewModels.AreaViewModel
+@{
+    var usedBy = Model.PropertyCount;
+}
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <label asp-for="NameEn" class="form-label"></label>
+        <input asp-for="NameEn" class="form-control" />
+        <span asp-validation-for="NameEn" class="text-danger"></span>
+    </div>
+    <div class="col-md-6 mb-3">
+        <label asp-for="NameAr" class="form-label"></label>
+        <input asp-for="NameAr" class="form-control" dir="rtl" lang="ar" />
+        <span asp-validation-for="NameAr" class="text-danger"></span>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <label asp-for="Key" class="form-label"></label>
+        <input asp-for="Key" class="form-control font-monospace" autocomplete="off" placeholder="e.g. newCairo" />
+        <span asp-validation-for="Key" class="text-danger"></span>
+        <small class="text-muted d-block mt-1">
+            The public site filters and translates by this key.
+            @if (!Model.IsCreate && usedBy > 0)
+            {
+                <span class="text-warning">Used by @usedBy listing(s) — changing it can break links and filters.</span>
+            }
+        </small>
+    </div>
+    <div class="col-md-3 col-6 mb-3">
+        <label asp-for="DisplayOrder" class="form-label"></label>
+        <input asp-for="DisplayOrder" class="form-control" type="number" min="0" max="1000" />
+        <span asp-validation-for="DisplayOrder" class="text-danger"></span>
+    </div>
+    <div class="col-md-3 col-6 mb-3 d-flex align-items-end">
+        <div class="form-check form-switch form-switch-md mb-2">
+            <input asp-for="IsActive" class="form-check-input" />
+            <label asp-for="IsActive" class="form-check-label"></label>
+        </div>
+    </div>
+</div>

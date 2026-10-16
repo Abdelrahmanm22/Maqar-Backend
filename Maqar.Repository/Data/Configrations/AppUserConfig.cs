@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,9 +24,10 @@ namespace Maqar.Repository.Data.Configrations
             builder.Property(x => x.Gender)
                 .IsRequired();
 
+            // No HasDefaultValue(true): EF treats an explicit `false` as "unset" and lets the DB default
+            // win, so an inactive user would be saved active. The C# initialiser supplies the default.
             builder.Property(x => x.IsActive)
-                .IsRequired()
-                .HasDefaultValue(true);
+                .IsRequired();
 
             builder.Property(x => x.ImageUrl)
                 .IsRequired(false)

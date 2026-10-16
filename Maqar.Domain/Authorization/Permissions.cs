@@ -36,6 +36,13 @@ namespace Maqar.Domain.Authorization
             public const string Delete = "Properties.Delete";
             public const string Publish = "Properties.Publish";
             public const string Feature = "Properties.Feature";
+
+            /// <summary>
+            /// Lifts the ownership scope. Without it every property query and action is limited to the
+            /// listings the user created (brokers); with it, the other Properties grants apply to all.
+            /// Also unlocks general contact messages and other brokers' inquiries.
+            /// </summary>
+            public const string ViewAll = "Properties.ViewAll";
         }
 
         public static class Areas
