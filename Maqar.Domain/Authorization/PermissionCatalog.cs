@@ -84,6 +84,12 @@ namespace Maqar.Domain.Authorization
                     "Mark a message read, replied or archived."),
                 new PermissionDescriptor(Permissions.ContactMessages.Delete, "Delete contact messages"),
             }),
+            new("Settings", "Site Settings", 7, new[]
+            {
+                new PermissionDescriptor(Permissions.Settings.View, "View site settings"),
+                new PermissionDescriptor(Permissions.Settings.Edit, "Edit site settings",
+                    "Change the company phone, WhatsApp, email and address shown on the public site — also the fallback for listings whose broker has no number."),
+            }),
         }
         .OrderBy(m => m.Order)
         .ToList();

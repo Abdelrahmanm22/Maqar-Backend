@@ -68,6 +68,7 @@ namespace Maqar.Services.Identity
                 user.UserName ?? string.Empty,
                 user.Email ?? string.Empty,
                 user.PhoneNumber,
+                user.WhatsAppNumber,
                 user.Gender,
                 user.IsActive,
                 user.ImageUrl,
@@ -85,6 +86,7 @@ namespace Maqar.Services.Identity
                 UserName = request.UserName.Trim(),
                 Email = request.Email.Trim(),
                 PhoneNumber = request.PhoneNumber,
+                WhatsAppNumber = string.IsNullOrWhiteSpace(request.WhatsAppNumber) ? null : request.WhatsAppNumber.Trim(),
                 Gender = request.Gender,
                 IsActive = request.IsActive,
                 ImageUrl = request.ImageUrl,
@@ -161,6 +163,7 @@ namespace Maqar.Services.Identity
                 if (request.ImageUrl is not null)
                     user.ImageUrl = request.ImageUrl;
                 user.PhoneNumber = request.PhoneNumber;
+                user.WhatsAppNumber = string.IsNullOrWhiteSpace(request.WhatsAppNumber) ? null : request.WhatsAppNumber.Trim();
 
                 var nameResult = await _userManager.SetUserNameAsync(user, request.UserName.Trim());
                 if (!nameResult.Succeeded)

@@ -1,0 +1,90 @@
+@model Maqar.Admin.ViewModels.SiteSettingsViewModel
+@{
+    ViewData["Title"] = "Site Settings";
+}
+
+<div class="row justify-content-center">
+    <div class="col-xl-8 col-lg-10">
+        <div class="card">
+            <div class="card-body">
+                <div class="mb-4">
+                    <h4 class="card-title mb-1">Site Settings</h4>
+                    <p class="text-muted mb-0">
+                        Contact details on the public site — footer, contact page — and the Call / WhatsApp numbers
+                        for any listing whose broker has none.
+                        @if (Model.UpdatedAt is not null)
+                        {
+                            <span>Last saved @Model.UpdatedAt.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm").</span>
+                        }
+                    </p>
+                </div>
+
+                <form asp-action="Edit" method="post" id="settings-form">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                    <h5 class="font-size-15 mb-3"><i class="bx bx-phone text-primary me-1"></i> Contact</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="Phone" class="form-label"></label>
+                            <input asp-for="Phone" class="form-control" dir="ltr" placeholder="+201000000000" />
+                            <span asp-validation-for="Phone" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="PhoneDisplay" class="form-label"></label>
+                            <input asp-for="PhoneDisplay" class="form-control" dir="ltr" placeholder="+20 100 000 0000" />
+                            <span asp-validation-for="PhoneDisplay" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="WhatsApp" class="form-label"></label>
+                            <input asp-for="WhatsApp" class="form-control" dir="ltr" placeholder="201000000000" />
+                            <span asp-validation-for="WhatsApp" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="Email" class="form-label"></label>
+                            <input asp-for="Email" class="form-control" dir="ltr" />
+                            <span asp-validation-for="Email" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-map text-primary me-1"></i> Address</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="AddressEn" class="form-label"></label>
+                            <input asp-for="AddressEn" class="form-control" />
+                            <span asp-validation-for="AddressEn" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="AddressAr" class="form-label"></label>
+                            <input asp-for="AddressAr" class="form-control" dir="rtl" lang="ar" />
+                            <span asp-validation-for="AddressAr" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <h5 class="font-size-15 mb-3 mt-2"><i class="bx bx-link-external text-primary me-1"></i> Social</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="FacebookUrl" class="form-label"></label>
+                            <input asp-for="FacebookUrl" class="form-control" dir="ltr" placeholder="https://facebook.com/..." />
+                            <span asp-validation-for="FacebookUrl" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="InstagramUrl" class="form-label"></label>
+                            <input asp-for="InstagramUrl" class="form-control" dir="ltr" placeholder="https://instagram.com/..." />
+                            <span asp-validation-for="InstagramUrl" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <permission required="@Permissions.Settings.Edit">
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="submit" class="btn btn-primary"><i class="bx bx-check me-1"></i> Save Settings</button>
+                        </div>
+                    </permission>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

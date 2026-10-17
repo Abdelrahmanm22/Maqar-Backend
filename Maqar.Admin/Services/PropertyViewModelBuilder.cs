@@ -6,6 +6,7 @@ using Maqar.Admin.ViewModels;
 using Maqar.Domain;
 using Maqar.Domain.Models;
 using Maqar.Domain.Models.Identity;
+using Maqar.Domain.Services.Analytics;
 using Maqar.Domain.Services.Lookups;
 using Maqar.Domain.Services.Properties;
 using Maqar.Domain.Specifications.ContactMessages;
@@ -45,6 +46,7 @@ namespace Maqar.Admin.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<AppUser> _userManager;
         private readonly IMapper _mapper;
+        private readonly IPropertyAnalyticsService _analytics;
 
         public PropertyViewModelBuilder(
             IPropertyService propertyService,
@@ -52,7 +54,8 @@ namespace Maqar.Admin.Services
             ILookupService<Feature> features,
             IUnitOfWork unitOfWork,
             UserManager<AppUser> userManager,
-            IMapper mapper)
+            IMapper mapper,
+            IPropertyAnalyticsService analytics)
         {
             _propertyService = propertyService;
             _areas = areas;
@@ -60,6 +63,7 @@ namespace Maqar.Admin.Services
             _unitOfWork = unitOfWork;
             _userManager = userManager;
             _mapper = mapper;
+            _analytics = analytics;
         }
 
         public async Task<PropertyListViewModel> BuildListAsync(PropertySpecParams filters, string? ownerScope)
@@ -86,15 +90,21 @@ namespace Maqar.Admin.Services
             return vm;
         }
 
-        public async Task<PropertyDetailsViewModel> BuildDetailsAsync(Property property, bool canViewInquiries) => new()
+        public async Task<PropertyDetailsViewModel> BuildDetailsAsync(Property property, bool canViewInquiries)
         {
-            Property = property,
-            CanViewInquiries = canViewInquiries,
-            // The property is already scope-checked by the caller, so its own inquiries are fair game.
-            Inquiries = canViewInquiries
-                ? (await _unitOfWork.Repository<ContactMessage>().GetAllAsync(new ContactMessagesForPropertySpec(property.Id))).ToList()
-                : Array.Empty<ContactMessage>(),
-        };
+            var (recent, allTime) = await _analytics.GetPropertyTotalsAsync(property.Id, DashboardViewModel.Days);
+
+            return new()
+            {
+                Property = property,
+                CanViewInquiries = canViewInquiries,
+                Stats = new PropertyStatsViewModel(DashboardViewModel.Days, recent, allTime),
+                // The property is already scope-checked by the caller, so its own inquiries are fair game.
+                Inquiries = canViewInquiries
+                    ? (await _unitOfWork.Repository<ContactMessage>().GetAllAsync(new ContactMessagesForPropertySpec(property.Id))).ToList()
+                    : Array.Empty<ContactMessage>(),
+            };
+        }
 
         public Task<PropertyFormViewModel> BuildCreateFormAsync() =>
             FillLookupsAsync(new PropertyFormViewModel(), currentAreaId: null);

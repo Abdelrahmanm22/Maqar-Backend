@@ -11,7 +11,9 @@ using Maqar.Domain.Repositories;
 using Maqar.Domain.Services;
 using Maqar.Domain.Services.ContactMessages;
 using Maqar.Domain.Services.Identity;
+using Maqar.Domain.Services.Analytics;
 using Maqar.Domain.Services.Lookups;
+using Maqar.Domain.Services.Settings;
 using Maqar.Domain.Models;
 using Maqar.Domain.Services.Properties;
 using Maqar.Repository;
@@ -19,7 +21,10 @@ using Maqar.Repository.Data;
 using Maqar.Repository.Storage;
 using Maqar.Services.ContactMessages;
 using Maqar.Services.Identity;
+using Maqar.Repository.Repositories;
+using Maqar.Services.Analytics;
 using Maqar.Services.Lookups;
+using Maqar.Services.Settings;
 using Maqar.Services.Properties;
 
 namespace Maqar.Admin
@@ -56,6 +61,10 @@ namespace Maqar.Admin
             builder.Services.AddScoped<ILookupService<Area>, AreaService>();
             builder.Services.AddScoped<ILookupService<Feature>, FeatureService>();
             builder.Services.AddScoped<IPropertyViewModelBuilder, PropertyViewModelBuilder>();
+            builder.Services.AddScoped<IDashboardViewModelBuilder, DashboardViewModelBuilder>();
+            builder.Services.AddScoped<IPropertyStatsRepository, PropertyStatsRepository>();
+            builder.Services.AddScoped<IPropertyAnalyticsService, PropertyAnalyticsService>();
+            builder.Services.AddScoped<ISiteSettingsService, SiteSettingsService>();
 
             // Who is making the request — Maqar.Repository / Maqar.Services must not see IHttpContextAccessor.
             builder.Services.AddHttpContextAccessor();

@@ -38,6 +38,11 @@ namespace Maqar.Admin.ViewModels
         [Display(Name = "Phone number")]
         public string? PhoneNumber { get; set; }
 
+        /// <summary>Used for the WhatsApp button on this broker's listings. Empty = their phone number, then the site number.</summary>
+        [RegularExpression(@"^\+?[0-9 ()-]{8,30}$", ErrorMessage = "Enter a WhatsApp number, e.g. 201012345678.")]
+        [Display(Name = "WhatsApp number")]
+        public string? WhatsAppNumber { get; set; }
+
         [Required(ErrorMessage = "Gender is required.")]
         public Gender Gender { get; set; } = Gender.Male;
 

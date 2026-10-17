@@ -1,9 +1,10 @@
+@model Maqar.Admin.ViewModels.DashboardViewModel
 @{
     ViewData["Title"] = "Dashboard";
 }
 
 <div class="row">
-    <div class="col-xl-5">
+    <div class="col-xl-4">
         <div class="card overflow-hidden">
             <div class="bg-primary bg-soft">
                 <div class="row">
@@ -21,9 +22,60 @@
             <div class="card-body pt-0">
                 <p class="text-muted mt-3 mb-0">
                     Manage Maqar's listings, users and roles from one place.
-                    Modules will appear here as they come online.
+                    @if (Model.ShowStats)
+                    {
+                        <span>Engagement below covers the last @Maqar.Admin.ViewModels.DashboardViewModel.Days days@(Model.IsScoped ? " on your listings" : "").</span>
+                    }
                 </p>
             </div>
         </div>
     </div>
+
+    @if (Model.ShowStats)
+    {
+        <div class="col-xl-8">
+            <div class="row">
+                @{
+                    var cards = new[]
+                    {
+                        (Label: "Listing views", Value: Model.Totals.Views, Icon: "bx-show", Css: "primary"),
+                        (Label: "WhatsApp taps", Value: Model.Totals.WhatsAppClicks, Icon: "bxl-whatsapp", Css: "success"),
+                        (Label: "Call taps", Value: Model.Totals.CallClicks, Icon: "bx-phone", Css: "info"),
+                    };
+                }
+                @foreach (var card in cards)
+                {
+                    <div class="col-md-4">
+                        <div class="card mini-stats-wid">
+                            <div class="card-body">
+                                <div class="d-flex">
+                                    <div class="flex-grow-1">
+                                        <p class="text-muted fw-medium mb-1">@card.Label</p>
+                                        <h4 class="mb-0">@card.Value.ToString("N0")</h4>
+                                    </div>
+                                    <div class="avatar-sm rounded-circle bg-@card.Css-subtle align-self-center">
+                                        <span class="avatar-title rounded-circle bg-transparent text-@card.Css font-size-24">
+                                            <i class="bx @card.Icon"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 </div>
+
+@if (Model.ShowStats)
+{
+    <div class="row">
+        <div class="col-xl-6">
+            <partial name="_TopProperties" model="@(("Most viewed", "bx-show", "views", Model.MostViewed))" />
+        </div>
+        <div class="col-xl-6">
+            <partial name="_TopProperties" model="@(("Most contacted (WhatsApp + calls)", "bx-phone-call", "taps", Model.MostContacted))" />
+        </div>
+    </div>
+}

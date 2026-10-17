@@ -1,23 +1,30 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Maqar.Admin.Helpers;
 using Maqar.Admin.Models;
+using Maqar.Admin.Services;
+using Maqar.Domain.Authorization;
 
 namespace Maqar.Admin.Controllers
 {
-    [Authorize]
-    public class HomeController : Controller
+    public class HomeController : AdminBaseController
     {
-        private readonly ILogger<HomeController> _logger;
+        private readonly IDashboardViewModelBuilder _dashboard;
+        private readonly IAuthorizationService _authorization;
 
-        public HomeController(ILogger<HomeController> logger)
+        public HomeController(IDashboardViewModelBuilder dashboard, IAuthorizationService authorization)
         {
-            _logger = logger;
+            _dashboard = dashboard;
+            _authorization = authorization;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
-            return View();
+            var canViewProperties = (await _authorization.AuthorizeAsync(User, Permissions.Properties.View)).Succeeded;
+            var scope = await _authorization.GetPropertyOwnerScopeAsync(User);
+
+            return View(await _dashboard.BuildAsync(canViewProperties, scope));
         }
 
         // /Home/Error is the UseExceptionHandler target — requiring auth here would redirect an

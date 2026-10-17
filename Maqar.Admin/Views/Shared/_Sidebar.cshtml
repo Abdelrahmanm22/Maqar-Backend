@@ -56,7 +56,7 @@
                     </li>
                 </permission>
 
-                <permission required="@Permissions.Users.View,@Permissions.Roles.View" mode="any">
+                <permission required="@Permissions.Users.View,@Permissions.Roles.View,@Permissions.Settings.View" mode="any">
                     <li class="menu-title">Administration</li>
                 </permission>
                 <permission required="@Permissions.Users.View">
@@ -72,6 +72,14 @@
                         <a asp-controller="Role" asp-action="Index" class="waves-effect">
                             <i class="bx bx-shield-quarter"></i>
                             <span>Roles</span>
+                        </a>
+                    </li>
+                </permission>
+                <permission required="@Permissions.Settings.View">
+                    <li>
+                        <a asp-controller="Settings" asp-action="Edit" class="waves-effect">
+                            <i class="bx bx-cog"></i>
+                            <span>Site Settings</span>
                         </a>
                     </li>
                 </permission>

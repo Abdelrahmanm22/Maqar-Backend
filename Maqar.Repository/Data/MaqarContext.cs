@@ -22,6 +22,8 @@ namespace Maqar.Repository.Data
         public DbSet<Area> Areas { get; set; }
         public DbSet<Feature> Features { get; set; }
         public DbSet<ContactMessage> ContactMessages { get; set; }
+        public DbSet<PropertyEvent> PropertyEvents { get; set; }
+        public DbSet<SiteSettings> SiteSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

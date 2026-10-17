@@ -22,6 +22,8 @@ namespace Maqar.Api.Errors
             403 => "You are not allowed to do this",
             404 => "Resource Not Found",
             405 => "Method Not Allowed",
+            415 => "Unsupported media type. Send the body as application/json.",
+            429 => "Too many requests. Please wait a few minutes and try again.",
             500 => "Internal Server Error",
             _ => null,
         };

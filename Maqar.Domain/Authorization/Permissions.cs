@@ -61,6 +61,13 @@ namespace Maqar.Domain.Authorization
             public const string Delete = "Features.Delete";
         }
 
+        /// <summary>Site-wide contact details shown on the public site (Site Settings).</summary>
+        public static class Settings
+        {
+            public const string View = "Settings.View";
+            public const string Edit = "Settings.Edit";
+        }
+
         public static class ContactMessages
         {
             public const string View = "ContactMessages.View";

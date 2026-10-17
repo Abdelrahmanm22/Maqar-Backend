@@ -1,0 +1,43 @@
+@model (string Title, string Icon, string Unit, IReadOnlyList<Maqar.Domain.Services.Analytics.TopProperty> Rows)
+@* A ranked list of listings by engagement over the dashboard's window. *@
+
+<div class="card">
+    <div class="card-body">
+        <h4 class="card-title mb-3"><i class="bx @Model.Icon text-primary me-1"></i> @Model.Title</h4>
+        @if (Model.Rows.Count == 0)
+        {
+            <p class="text-muted mb-0">No activity yet. Numbers appear once visitors open listings on the public site.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <tbody>
+                        @for (var i = 0; i < Model.Rows.Count; i++)
+                        {
+                            var row = Model.Rows[i];
+                            <tr>
+                                <td class="text-muted" style="width:28px">@(i + 1)</td>
+                                <td style="width:64px">
+                                    @if (row.CoverUrl is not null)
+                                    {
+                                        <img src="@row.CoverUrl" alt="" class="rounded property-thumb" />
+                                    }
+                                    else
+                                    {
+                                        <div class="rounded property-thumb property-thumb-empty"><i class="bx bx-image"></i></div>
+                                    }
+                                </td>
+                                <td class="min-width-0">
+                                    <a asp-controller="Property" asp-action="Details" asp-route-id="@row.PropertyId"
+                                       class="fw-semibold text-body d-block text-truncate" style="max-width:280px">@row.TitleEn</a>
+                                </td>
+                                <td class="text-end text-nowrap"><strong>@row.Count.ToString("N0")</strong> <span class="text-muted">@Model.Unit</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

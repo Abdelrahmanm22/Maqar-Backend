@@ -48,7 +48,9 @@ Maqar.Repository   (Infrastructure — references Maqar.Domain)
     ├── Data/MaqarContext.cs               (IdentityDbContext<AppUser>; audit stamping + soft delete in SaveChanges)
     ├── Data/Configrations/                (Fluent API per entity — "Configrations" typo kept from Travel; don't rename)
     ├── Data/AppIdentityDbContextSeed.cs   (SuperAdmin role + MaqarAdmin user)
-    ├── Data/Migrations/                   (InitialIdentity, AddPropertiesDomain, FixAppUserIsActiveDefault)
+    ├── Data/Migrations/                   (InitialIdentity, AddPropertiesDomain, FixAppUserIsActiveDefault,
+    │                                       AddTrackingAndSiteSettings)
+    ├── Repositories/PropertyStatsRepository.cs (aggregations the generic repo can't express)
     ├── GenericRepository.cs
     ├── SpecificationEvalutor.cs           (typo intentional — keep it)
     ├── Storage/FileStorageService.cs      (IFileStorageService impl — disk-backed under wwwroot/Files)
@@ -76,10 +78,19 @@ Maqar.Admin        (MVC dashboard — references Maqar.Repository + Maqar.Servic
     └── Program.cs
 
 Maqar.Api          (Web API — references Maqar.Repository + Maqar.Services)
-    ├── Controllers/       (ApiBaseController, ErrorsController — public endpoints go here)
+    ├── Controllers/       (ApiBaseController, ErrorsController; Properties, Areas, Features, Contact, Site)
+    ├── Dtos/              (PropertyDto, PagedResponse<T>, LookupDto, FilterMetadataDto, SiteSettingsDto,
+    │                       ContactRequestDto, PropertyEventRequestDto — the frontend contract)
+    ├── Mapping/           (PublicMappings — entity → DTO, contact fallback, absolute image URLs)
+    ├── Helpers/           (RateLimits, VisitorHash, PhoneNumbers, LowercaseRouteTransformer)
+    ├── Options/           (MediaOptions, TrackingOptions)
     ├── Errors/            (ApiResponse, ApiValidationErrorResponse, ApiExceptionResponse)
     ├── Middlewares/       (ExceptionMiddleware)
-    └── Program.cs         (Serilog, DbContext, UoW, generic repo, OpenAPI, CORS "Frontend", error handling)
+    └── Program.cs         (Serilog, JSON enum keys, services, rate limiter, OpenAPI + Scalar, CORS, error handling)
+
+docs/
+    ├── API.md             (every public endpoint with every response — for the frontend developer)
+    └── FRONTEND_NOTES.md  (what the frontend must change to consume the API)
 ```
 
 ### Dependency Flow
@@ -129,11 +140,15 @@ Bilingual text is stored as **`Ar` / `En` column pairs**. API DTOs fold them int
 | **`PropertyImage`** | `ImageUrl` (500), `DisplayOrder`, `IsCover` | Cascade from Property<br>The query filter (`!Property.IsDeleted`) mirrors Property's<br>"Exactly one cover" is a service rule, not a DB rule |
 | **`Area`** | `Key` (50, unique), `NameAr/En` (100), `DisplayOrder`, `IsActive` | Seeded (`HasData`, Ids 1–5) with the frontend's `AreaKey` values |
 | **`Feature`** | `Key` (50, unique), `NameAr/En` (100), `Icon?` (50, Boxicons), `DisplayOrder`, `IsActive` | Seeded (Ids 1–8) with the frontend's `FeatureKey` values and its locale labels |
+| **`PropertyEvent`** | `PropertyId`, `Type` (`PropertyEventType`: View / WhatsAppClick / CallClick), `VisitorHash` (64), `CreatedAt` | Cascade from Property; query filter `!Property.IsDeleted`<br>Indexes `(PropertyId, Type, CreatedAt)` for stats and `(VisitorHash, PropertyId, Type, CreatedAt)` for dedup |
+| **`SiteSettings`** | `Phone`, `PhoneDisplay`, `WhatsApp`, `Email`, `AddressAr/En?`, `FacebookUrl?`, `InstagramUrl?`, `UpdatedAt?` | **A single row, Id = `SiteSettings.SingletonId` (1)**, seeded by `HasData` with the values the frontend hardcoded |
 | **`ContactMessage`** : `IAuditableEntity` | `Name` (100), `Email` (256), `Phone` (30), `Message` (2000), `Status` (C# default New) | `PropertyId?` → Property, **SetNull**: null for the general form, set for a listing inquiry<br>Index on `(Status, CreatedAt)` |
 
 **Property indexes:**
 - the public listing filter `(Status, IsDeleted, ListingType, Type, AreaId)`
 - `Price`, `CreatedAt`, `IsFeatured`, and the FK indexes.
+
+**`AppUser.WhatsAppNumber?`** (30) is the broker's WhatsApp number for their listings (see Public API → contact).
 
 **Rules:**
 - **`Area.Key` / `Feature.Key` are the API contract.** The frontend filters and translates by them, so never rename a seeded key.
@@ -219,6 +234,12 @@ Services return **`OperationResult` / `OperationResult<T>`** (`Maqar.Domain/Serv
 | `IPropertyService` | `PropertyService` (Maqar.Services/Properties) | Paged list, details, create/update (input + features + images), soft delete, status, featured, cover/move/remove image. **Every member takes `ownerScope`** |
 | `IContactMessageService` | `ContactMessageService` (Maqar.Services/ContactMessages) | Paged inbox, new-count, details (marks New → Read), status, delete. **Scoped** |
 | `ILookupService<Area>` / `ILookupService<Feature>` | `AreaService` / `FeatureService` : `LookupService<T>` (Maqar.Services/Lookups) | Ordered list, get, key uniqueness, next display order, usage count, create/update (rejects a taken key), delete |
+| `IPublicPropertyService` | `PublicPropertyService` (Maqar.Services/Public) | The public read side: paged search, details, featured, similar, filter bounds. **Published listings only**; anything else is null |
+| `IPropertyEventService` | `PropertyEventService` (Maqar.Services/Public) | Records view / WhatsApp / call events. A repeat by the same visitor within `DedupWindow` (30 minutes) succeeds without writing |
+| `ISiteSettingsService` | `SiteSettingsService` (Maqar.Services/Settings) | Get / update the singleton row |
+| `IPropertyAnalyticsService` | `PropertyAnalyticsService` (Maqar.Services/Analytics) | Dashboard numbers: totals, most viewed, most contacted, and per listing. **Scoped by `ownerScope`** |
+| `IPropertyStatsRepository` (Domain/Repositories) | `PropertyStatsRepository` (Maqar.Repository/Repositories) | Min/Max bounds and GROUP BY counts over projections. Exists because `IGenericRepository<T>` can only return entities and counts |
+| `IDashboardViewModelBuilder` | `DashboardViewModelBuilder` (Maqar.Admin/Services) | The Home dashboard: 30-day totals plus top-5 most viewed and most contacted |
 | `IPropertyViewModelBuilder` | `PropertyViewModelBuilder` (Maqar.Admin/Services) | Builds the Property list / details / form / image-strip view models (lookups, dropdowns, inquiries). In the web project because view models are web types |
 
 **Lookups share one generic service.**
@@ -333,10 +354,21 @@ Server=.;Database=MaqarDB;Trusted_Connection=True;MultipleActiveResultSets=true;
 
 ### `Maqar.Api`
 
-- Serilog, controllers, OpenAPI (`/openapi/v1.json` in Development), `MaqarContext`, `IUnitOfWork` and the generic repo.
-- CORS policy **`Frontend`**, with origins from `Cors:AllowedOrigins` in `appsettings.json`. Defaults: `http://localhost:8080` (Lovable/Vite dev server) and `http://localhost:5173`.
+- **Controllers:**
+  - JSON uses `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)`, so enums are the frontend's keys both ways.
+  - `AllowInputFormatterExceptionMessages = false`: no parser internals in errors.
+  - `RouteTokenTransformerConvention(LowercaseRouteTransformer)`: `/api/properties`, not `/api/Properties`, including in the OpenAPI document.
+- **Registered:**
+  - `MaqarContext`, `IUnitOfWork`, the generic repo, `IPropertyStatsRepository`
+  - `IPublicPropertyService`, `IPropertyEventService`, `IContactMessageService`, `ISiteSettingsService`, `ILookupService<Area|Feature>`.
+- **Config (`appsettings.json`):**
+  - **`Media:BaseUrl`**: the origin serving `/Files/...` (dev: the Admin's `https://localhost:7069`).
+  - **`Tracking:HashSalt`**: change it in production.
+  - **`Cors:AllowedOrigins`**: the `Frontend` policy. Defaults are `http://localhost:8080` (Lovable/Vite dev server) and `http://localhost:5173`.
+- **Rate limiter:** `AddMaqarRateLimits()` (`Helpers/RateLimits.cs`).
+- **OpenAPI:** `/openapi/v1.json` plus the **Scalar** explorer at `/scalar`, both Development only.
 - No auth.
-- **Pipeline:** `ExceptionMiddleware` (first, every environment) → `MapOpenApi` (Development) → `UseStatusCodePagesWithReExecute("/errors/{0}")` → HTTPS redirection → CORS → authorization → `MapControllers`.
+- **Pipeline:** `ExceptionMiddleware` (first, every environment) → `MapOpenApi` + `MapScalarApiReference` (Development) → `UseStatusCodePagesWithReExecute("/errors/{0}")` → HTTPS redirection → CORS → **rate limiter** → authorization → `MapControllers`.
 
 ### API Error Handling (ported from Talabat.APIs)
 
@@ -347,7 +379,9 @@ Every error has the same JSON shape, `{ statusCode, message }`, plus `errors` or
 | **NotFound / BadRequest** from an action | The controller: `return NotFound(new ApiResponse(404, "Property not found"));` | 404 / 400 | `ApiResponse` (a `null` message falls back to the default for the code) |
 | **Validation** (model binding / DataAnnotations) | `InvalidModelStateResponseFactory` in `Program.cs` (the `Validation error response` region) | 400 | `ApiValidationErrorResponse`: `errors: string[]` |
 | **Server error** (any unhandled exception) | `Middlewares/ExceptionMiddleware` | 500 | `ApiExceptionResponse`. `details` holds the stack trace **in Development only**; it is `null` otherwise. The exception is logged through Serilog |
-| **Not-found endpoint** / wrong verb / bare 401/403 | `UseStatusCodePagesWithReExecute` re-executes to `ErrorsController` (`errors/{code}`) | the real code (404, 405, …) | `ApiResponse` |
+| **Not-found endpoint** / wrong verb / bare 401/403 / 415 | `UseStatusCodePagesWithReExecute` re-executes to `ErrorsController` (`errors/{code}`). For 415 to arrive body-less, `ApiBehaviorOptions.SuppressMapClientErrors = true` | the real code (404, 405, 415, …) | `ApiResponse` |
+| **Malformed JSON body** | The factory spots `$…` model-state keys and returns a single message | 400 | `errors: ["The request body is not valid JSON."]` |
+| **Rate limited** | `RateLimits.OnRejected` | 429 + `Retry-After` | `ApiResponse` |
 
 **Rules:**
 - **Inherit public controllers from `ApiBaseController`.** It provides `api/[controller]` routing and `[ApiController]`, and the automatic validation response depends on `[ApiController]`.
@@ -364,6 +398,54 @@ Every error has the same JSON shape, `{ statusCode, message }`, plus `errors` or
 | `/api/doesnotexist` | 404 |
 | `DELETE` on a GET route | 405 |
 | `/openapi/v1.json` | 200, with no `errors/` route |
+
+---
+
+## Public API (Maqar.Api) — what the frontend consumes
+
+**The full contract, with every response, is in [docs/API.md](docs/API.md)** (for the frontend developer). **[docs/FRONTEND_NOTES.md](docs/FRONTEND_NOTES.md)** lists what the frontend must change. **Update both whenever an endpoint or DTO changes.**
+
+| Method | Route | Notes |
+|---|---|---|
+| GET | `/api/properties` | `PublicPropertySpecParams`: area, type, listingType, rentalUnit, min/maxPrice, min/maxSize, bedrooms (≥), sort `newest`/`asc`/`desc`, page, pageSize (default 6, max 24). Returns `PagedResponse<PropertyDto>` |
+| GET | `/api/properties/featured?take=` | 1–12, default 6 |
+| GET | `/api/properties/{id:int}` | 404 unless Published |
+| GET | `/api/properties/{id:int}/similar?take=` | Same listing type, and the same area or property type. 1–8, default 4 |
+| GET | `/api/properties/filters` | Active lookups, every enum key, and min/max price per listing type and size (`IPropertyStatsRepository`) |
+| POST | `/api/properties/{id:int}/events` | `{ type: "view" \| "whatsapp" \| "call" }` → 204. Rate limit `events` |
+| GET | `/api/areas`, `/api/features` | Active only, in display order |
+| GET | `/api/site` | `SiteSettings` |
+| POST | `/api/contact` | `ContactRequestDto` → 201 `{ id }`. A non-public `propertyId` gives 404. Rate limit `contact` |
+
+**The DTO contract** (`Dtos/`, `Mapping/PublicMappings.cs`) mirrors the frontend's `Property` type in `src/data/properties.ts`:
+- **Enums and lookups:** enums are camelCase keys; `area` and `features[]` are lookup keys.
+- **Text:** `{ ar, en }` objects.
+- **Nullable:** `bedrooms`, `bathrooms`, `finishing`, `floor` and `coordinates` are nullable. The frontend notes tell the developer to widen their types. (This replaced the earlier "map null → 0" idea.)
+- **`images[]`:** absolute URLs (`Media:BaseUrl` + `/Files/...`), cover first.
+- **`contact { phone, whatsapp }`:**
+  - phone: the broker's `PhoneNumber`
+  - whatsapp: the broker's `WhatsAppNumber`, else their phone. `PhoneNumbers.ToWhatsApp` normalises Egyptian local numbers to `20…` digits.
+  - Both fall back to `SiteSettings` when the broker is inactive or deleted or has no number.
+- **Mapping is explicit** (no AutoMapper in the API), so every contract rule is visible in one file.
+
+**Published only.** Every public spec (`PublicPropertySpecs.cs`) includes `Status == Published`; soft delete is automatic. A draft, sold, rented or archived listing answers **404** exactly like a missing one.
+
+**Rate limits** (`Helpers/RateLimits.cs`):
+- Fixed window per IP:
+  - `contact`: 5 per 10 minutes.
+  - `events`: 60 per minute.
+- The limiter runs before model validation, so **invalid requests count too**.
+- A rejection gives 429 `ApiResponse` + `Retry-After`.
+
+**Tracking:**
+- **Visitor identity:** `VisitorHash` = SHA-256(IP | User-Agent | `Tracking:HashSalt`). The raw IP is never stored.
+- **Dedup:** `PropertyEventService` skips an insert when `RecentEventSpec` finds the same visitor + listing + type within 30 minutes, but still returns success. The API therefore always answers 204, and clients needn't debounce.
+- **Views come from the client** (`useEffect`) and are never counted during SSR (see FRONTEND_NOTES).
+- **Dashboard:** the Admin home shows 30-day totals and the top-5 most viewed and most contacted. Property Details shows the last 30 days vs all time. Both are scoped by `ownerScope`, so brokers see their own listings only.
+
+**Site Settings:**
+- The singleton is edited at `Settings/Edit` (Admin, permissions `Settings.View` / `Settings.Edit`) and served by `/api/site`.
+- It is also the contact fallback above.
 
 ---
 
@@ -418,7 +500,7 @@ Claims-based permissions on top of ASP.NET Identity. **There is no Permission ta
 | `PermissionClaims.cs` | `Pack` / `Unpack`. The cookie carries **one** comma-joined permission claim; the DB keeps one row each |
 | `AppRoles.cs` | `SuperAdmin` + `IsProtected(name)`. Named `AppRoles` so it doesn't clash with `Permissions.Roles` |
 
-**Current modules (31 permissions):**
+**Current modules (33 permissions):**
 
 | Module (Order) | Permissions |
 |---|---|
@@ -428,6 +510,7 @@ Claims-based permissions on top of ASP.NET Identity. **There is no Permission ta
 | **Areas** (4) | `View`, `Create`, `Edit`, `Delete` |
 | **Features** (5) | `View`, `Create`, `Edit`, `Delete` |
 | **ContactMessages** (6) | `View`, `ChangeStatus`, `Delete` |
+| **Settings** (7) | `View`, `Edit` (Site Settings) |
 
 All six modules have screens and sidebar items. The sidebar has three sections: **Listings** (Properties, Contact Messages), **Catalog** (Areas, Features) and **Administration**.
 
@@ -507,7 +590,7 @@ Rules:
 
 ## Frontend Contract (API)
 
-From `D:\My Career\maqar-properties-hub\src\data\properties.ts`. **The models are implemented (see Domain Models); the endpoints and DTOs are not yet.**
+From `D:\My Career\maqar-properties-hub\src\data\properties.ts`. **Implemented. The live contract is [docs/API.md](docs/API.md) (see the Public API section above). The notes below are the original analysis.**
 
 - **Property:**
   - `id`, `type` (`apartment|villa|shop|land|building`), `listingType` (`sale|rent`).
@@ -679,6 +762,27 @@ When porting from Talabat again, check for the same patterns.
 - **Edit POST no longer compares error strings.** `PropertyController.Edit` used to test `result.Error == OwnerScope.NotFoundMessage`. On any failure it now redisplays the form, and the reload it needs anyway (for the existing images) returns null when the listing is out of scope, which gives the 404.
 - **Don't name a controller helper `JsonResult(...)`.** It shadows MVC's `JsonResult` type; the helper is `ToJson`.
 - **Verified:** the same end-to-end script passed after the refactor, plus checks for a duplicate key on Edit, deactivating an area (it disappears from the property form), deleting an unused area, a feature's usage count, deleting a feature, and the default display order.
+
+### 2026-10-17 — v6: public API, tracking, site settings, docs
+- **.NET 9's `Microsoft.AspNetCore.OpenApi` ignores XML doc comments**; that support arrived in .NET 10. Endpoint text comes from `[EndpointSummary]` / `[EndpointDescription]`, and the response list from `[ProducesResponseType<T>]`. Don't add `GenerateDocumentationFile` expecting it to show up.
+- **`api/[controller]` keeps the class name's casing** in the OpenAPI document (`/api/Properties`). The `LowercaseRouteTransformer` convention fixes the docs. Routing itself was always case-insensitive.
+- **A 415 from `[ApiController]` is a ProblemDetails body by default**, which breaks the "one error shape" rule. `SuppressMapClientErrors = true` makes it body-less, so re-execute turns it into an `ApiResponse`.
+- **An invalid enum in a JSON body leaked `System.Nullable\`1[...]`** in the error list. The event `type` is now a validated string, and `AllowInputFormatterExceptionMessages = false` plus the `$…`-key check turn any malformed body into one clean message.
+- **Don't test for an absolute URL with `Uri.TryCreate(path, UriKind.Absolute)`.** On Linux "/Files/x.jpg" parses as `file:///Files/x.jpg`, so a relative image path would be returned un-prefixed. Check for an `http(s)://` prefix instead.
+- **The `Range` record clashed with `System.Range`**, so the analytics type is `ValueRange`.
+- **Test-harness traps (not app bugs):**
+  - Git Bash passes non-ASCII command-line arguments to `curl.exe` through the ANSI code page, so Arabic sent with `-F TitleAr=…` was stored as `?`. Send it from a UTF-8 file (`-F "TitleAr=<file.txt"`); a round-trip through the Edit form proved the app stores Arabic correctly.
+  - `-d Phone=+20…` turns `+` into a space. Use `--data-urlencode`.
+  - Python on Windows reads piped stdin as cp1252. Use `urllib`, or `encoding='utf-8'` on files.
+  - Once the Admin binds an https port, `UseHttpsRedirection` answers http requests with **307**. Test the Admin over https with `curl -k`.
+- **Verified end to end (2026-10-17):**
+  - **Listings:** every filter, sort and page; the 400s; 404 for a draft, a missing id and a non-int id; 405; 415; malformed JSON.
+  - **Featured, similar, filters** (bounds matched the data), areas, features, site.
+  - **Contact:** 201 / 400 / 404, then 429 with `Retry-After: 600` on the 6th request.
+  - **Events:** 3 views from one visitor stored 1 row.
+  - **Contact fallback:** the broker's WhatsApp, then their phone normalised to `20…`, then the site numbers when the broker is inactive.
+  - **Site Settings** edits reach `/api/site`.
+  - **Dashboard:** totals and top lists, with broker scoping; the per-listing stats card; Scalar loads.
 
 ### Reusable guardrails (apply as the domain is built)
 - **Roles and users can't go through `IUnitOfWork.Repository<T>()`.** It requires `BaseModel`, which has an int Id, and Identity uses string Ids. Use `UserManager`/`RoleManager`. They share the scoped `MaqarContext`, so `BeginTransactionAsync` still makes multi-claim changes atomic.

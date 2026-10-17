@@ -13,6 +13,7 @@ namespace Maqar.Admin.Helpers
             ["Areas"] = "bx-map-pin",
             ["Features"] = "bx-list-check",
             ["ContactMessages"] = "bx-envelope",
+            ["Settings"] = "bx-cog",
         };
 
         public static string For(string moduleKey) =>

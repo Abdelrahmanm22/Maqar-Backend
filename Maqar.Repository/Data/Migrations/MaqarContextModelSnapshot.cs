@@ -342,6 +342,10 @@ namespace Maqar.Repository.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<string>("WhatsAppNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
@@ -479,6 +483,37 @@ namespace Maqar.Repository.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Maqar.Domain.Models.PropertyEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PropertyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VisitorHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PropertyId", "Type", "CreatedAt");
+
+                    b.HasIndex("VisitorHash", "PropertyId", "Type", "CreatedAt");
+
+                    b.ToTable("PropertyEvents");
+                });
+
             modelBuilder.Entity("Maqar.Domain.Models.PropertyImage", b =>
                 {
                     b.Property<int>("Id")
@@ -506,6 +541,68 @@ namespace Maqar.Repository.Data.Migrations
                     b.HasIndex("PropertyId", "DisplayOrder");
 
                     b.ToTable("PropertyImages");
+                });
+
+            modelBuilder.Entity("Maqar.Domain.Models.SiteSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AddressAr")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("AddressEn")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FacebookUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("InstagramUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("PhoneDisplay")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WhatsApp")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SiteSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Email = "hello@maqar.eg",
+                            Phone = "+201000000000",
+                            PhoneDisplay = "+20 100 000 0000",
+                            WhatsApp = "201000000000"
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -682,6 +779,17 @@ namespace Maqar.Repository.Data.Migrations
                     b.Navigation("Area");
 
                     b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("Maqar.Domain.Models.PropertyEvent", b =>
+                {
+                    b.HasOne("Maqar.Domain.Models.Property", "Property")
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Property");
                 });
 
             modelBuilder.Entity("Maqar.Domain.Models.PropertyImage", b =>

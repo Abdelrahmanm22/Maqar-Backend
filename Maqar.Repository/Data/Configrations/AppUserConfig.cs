@@ -29,6 +29,10 @@ namespace Maqar.Repository.Data.Configrations
             builder.Property(x => x.IsActive)
                 .IsRequired();
 
+            builder.Property(x => x.WhatsAppNumber)
+                .IsRequired(false)
+                .HasMaxLength(30);
+
             builder.Property(x => x.ImageUrl)
                 .IsRequired(false)
                 .HasMaxLength(500);

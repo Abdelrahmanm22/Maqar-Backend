@@ -118,6 +118,7 @@ namespace Maqar.Admin.ViewModels
         public Property Property { get; set; } = null!;
         public IReadOnlyList<ContactMessage> Inquiries { get; set; } = Array.Empty<ContactMessage>();
         public bool CanViewInquiries { get; set; }
+        public PropertyStatsViewModel Stats { get; set; } = null!;
     }
 
     /// <summary>What _Pager needs — built from any PagedResult via <see cref="From{T}"/>.</summary>

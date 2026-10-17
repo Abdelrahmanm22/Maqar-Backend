@@ -4,6 +4,7 @@ using Maqar.Domain.Models;
 using Maqar.Domain.Services;
 using Maqar.Domain.Services.ContactMessages;
 using Maqar.Domain.Specifications.ContactMessages;
+using Maqar.Domain.Specifications.Properties;
 
 namespace Maqar.Services.ContactMessages
 {
@@ -14,6 +15,28 @@ namespace Maqar.Services.ContactMessages
         private readonly IUnitOfWork _unitOfWork;
 
         public ContactMessageService(IUnitOfWork unitOfWork) => _unitOfWork = unitOfWork;
+
+        public async Task<OperationResult<int>> CreateAsync(string name, string email, string phone, string message, int? propertyId)
+        {
+            if (propertyId is not null
+                && await _unitOfWork.Repository<Property>().CountAsync(new PublicPropertyCountByIdSpec(propertyId.Value)) == 0)
+            {
+                return OperationResult<int>.Fail(OwnerScope.NotFoundMessage);
+            }
+
+            var contact = new ContactMessage
+            {
+                Name = name.Trim(),
+                Email = email.Trim(),
+                Phone = phone.Trim(),
+                Message = message.Trim(),
+                PropertyId = propertyId,
+            };
+
+            await _unitOfWork.Repository<ContactMessage>().AddAsync(contact);
+            await _unitOfWork.CompleteAsync();
+            return OperationResult<int>.Ok(contact.Id);
+        }
 
         public async Task<PagedResult<ContactMessage>> GetPagedAsync(ContactMessageSpecParams specParams, string? ownerScope)
         {
